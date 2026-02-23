@@ -4,14 +4,27 @@ import { useMemo } from "react";
 
 type NavItem = { to: string; label: string; roles?: Array<"admin" | "sucursal"> };
 
-function NavLink({ to, label }: { to: string; label: string }) {
+function NavLink({ to, label, roleType }: { 
+  to: string; 
+  label: string; 
+  roleType?: "admin" | "sucursal" | "shared";
+}) {
   const loc = useLocation();
 
-  // ✅ Activo si coincide exacto o si estás "dentro" de esa sección
   const active = loc.pathname === to || (to !== "/" && loc.pathname.startsWith(to));
 
+  const baseClass = "sidebar__link";
+  const activeClass = active ? " sidebar__link--active" : "";
+
+  const roleClass =
+    roleType === "admin"
+      ? " sidebar__link--admin"
+      : roleType === "sucursal"
+      ? " sidebar__link--sucursal"
+      : " sidebar__link--shared";
+
   return (
-    <Link to={to} className={active ? "sidebar__link sidebar__link--active" : "sidebar__link"}>
+    <Link to={to} className={baseClass + activeClass + roleClass}>
       {label}
     </Link>
   );
@@ -45,7 +58,7 @@ export function Layout() {
     []
   );
 
-  // ✅ si no hay rol (dev), mostramos todo (o podrías mostrar un menú básico)
+  // si no hay rol (dev),  menú básico
   const visibleItems = navItems.filter((it) => !it.roles || (role ? it.roles.includes(role) : true));
 
   function logout() {
@@ -80,20 +93,34 @@ export function Layout() {
           </div>
         </div>
 
-        <nav className="sidebar__nav">
-          {visibleItems.map((it) => (
-            <NavLink key={it.to} to={it.to} label={it.label} />
-          ))}
-        </nav>
+          <nav className="sidebar__nav">
+            {visibleItems.map((it) => {
+              let type: "admin" | "sucursal" | "shared" = "shared";
+
+              if (it.roles?.includes("admin") && !it.roles?.includes("sucursal")) {
+                type = "admin";
+              } else if (it.roles?.includes("sucursal") && !it.roles?.includes("admin")) {
+                type = "sucursal";
+              }
+
+              return (
+                <NavLink
+                  key={it.to}
+                  to={it.to}
+                  label={it.label}
+                  roleType={type}
+                />
+              );
+            })}
+          </nav>
 
         <div className="sidebar__footer">
           <button className="btn btn--danger" onClick={logout}>
             Salir
           </button>
 
-          <div className="muted" style={{ marginTop: 10, fontSize: 12 }}>
-            Tip: para dev, podés navegar directo a las rutas.
-          </div>
+         <div className="muted sidebar__hint"> para dev, podés navegar directo a las rutas.</div>
+
         </div>
       </aside>
 

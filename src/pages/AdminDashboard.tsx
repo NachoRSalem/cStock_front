@@ -16,7 +16,7 @@ export default function AdminDashboard() {
               <li className="list__item">Ver todo: stock/pedidos/ventas (todas las sucursales)</li>
               <li className="list__item">Aprobar / rechazar pedidos</li>
               <li className="list__item">Reportes económicos comparativos</li>
-              <li className="list__item">PDF de pedidos (cuando conectemos el endpoint)</li>
+              <li className="list__item">PDF de pedidos (cuando lo conectemos)</li>
             </ul>
           </div>
         </div>

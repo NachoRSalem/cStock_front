@@ -20,7 +20,7 @@ export default function BranchDashboard() {
             <ul className="list">
               <li className="list__item">Registrar ventas</li>
               <li className="list__item">Ver solo tu información</li>
-              <li className="list__item">Crear pedidos (si tu back lo permite)</li>
+              <li className="list__item">Crear pedidos </li>
               <li className="list__item">Confirmar recepción de pedidos asignados</li>
             </ul>
           </div>

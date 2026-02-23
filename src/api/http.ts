@@ -21,7 +21,7 @@ async function refreshAccessToken(): Promise<string | null> {
   const session = tokenStorage.getSession();
   if (!session) return null;
 
-  // ✅ Actualiza SOLO el access y conserva rol/sucursal/username/refresh
+  //  Actualiza SOLO el access y conserva rol/sucursal/username/refresh
   tokenStorage.setSession({ ...session, access: data.access });
 
   return data.access;

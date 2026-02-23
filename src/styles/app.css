@@ -38,6 +38,10 @@ body {
   color: var(--text);
 }
 
+a {
+  text-decoration: none;
+  color: inherit;
+}
 /* =========================================
    HELPERS
 ========================================= */
@@ -114,29 +118,69 @@ body {
   gap: 6px;
 }
 
+/* ===== Sidebar Links ===== */
+
 .sidebar__link {
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid transparent;
-  color: var(--text);
-  transition: 0.15s ease;
+  text-decoration: none; /* ✅ elimina subrayado */
+  font-weight: 500;
+  transition: all 0.15s ease;
 }
 
-.sidebar__link:hover {
-  background: #f3f4f6;
-  border-color: var(--border);
+/* ===== Shared (neutro) ===== */
+
+.sidebar__link--shared {
+  background: #ffffff;
+  color: #111827;
+  border-color: #e5e7eb;
 }
+
+.sidebar__link--shared:hover {
+  background: #f3f4f6;
+}
+
+/* ===== Admin (verde) ===== */
+
+.sidebar__link--admin {
+  background: #16a34a;
+  color: white;
+  border-color: #16a34a;
+}
+
+.sidebar__link--admin:hover {
+  background: #15803d;
+  border-color: #15803d;
+}
+
+/* ===== Sucursal (azul) ===== */
+
+.sidebar__link--sucursal {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
+
+.sidebar__link--sucursal:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+/* ===== Activo ===== */
 
 .sidebar__link--active {
-  background: #eef2ff;
-  border-color: #c7d2fe;
-  color: #1e40af;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.08);
 }
 
 .sidebar__footer {
   margin-top: auto;
   padding-top: 18px;
   border-top: 1px solid var(--border);
+}
+.sidebar__hint {
+  margin-top: 10px;
+  font-size: 12px;
 }
 
 .main {
@@ -266,10 +310,13 @@ body {
   border: 1px solid var(--border);
   background: #fff;
   cursor: pointer;
-  transition: 0.15s ease;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.15s ease;
 }
 
+/* efecto hover suave */
 .btn:hover {
+  transform: scale(1.01); /* 👈 apenas más grande */
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
   background: #f9fafb;
 }
 

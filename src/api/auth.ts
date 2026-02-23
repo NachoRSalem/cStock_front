@@ -12,6 +12,6 @@ export function login(username: string, password: string) {
   return apiFetch<TokenResponse>("/api/token/", {
     method: "POST",
     body: { username, password },
-    auth: false, // 🔐 login no necesita token
+    auth: false, 
   });
 }
