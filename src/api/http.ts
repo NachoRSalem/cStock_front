@@ -66,12 +66,22 @@ export async function apiFetch<T>(
       throw new Error(t || `HTTP ${retry.status}`);
     }
 
+    // Si es 204 No Content o no hay contenido, retornar null
+    if (retry.status === 204 || retry.headers.get("content-length") === "0") {
+      return null as T;
+    }
+
     return (await retry.json()) as T;
   }
 
   if (!res.ok) {
     const t = await res.text();
     throw new Error(t || `HTTP ${res.status}`);
+  }
+
+  // Si es 204 No Content o no hay contenido, retornar null
+  if (res.status === 204 || res.headers.get("content-length") === "0") {
+    return null as T;
   }
 
   return (await res.json()) as T;

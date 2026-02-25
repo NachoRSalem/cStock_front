@@ -43,6 +43,7 @@ export function Layout() {
 
       // Admin
       { to: "/admin/locations", label: "Sucursales", roles: ["admin"] },
+      { to: "/admin/products", label: "Productos", roles: ["admin"] },
       { to: "/admin/orders", label: "Pedidos", roles: ["admin"] },
       { to: "/admin/orders/aprobaciones", label: "Aprobar pedidos", roles: ["admin"] },
       { to: "/admin/sales", label: "Ventas", roles: ["admin"] },

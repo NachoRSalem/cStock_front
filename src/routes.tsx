@@ -12,6 +12,7 @@ import Locations from "./pages/Locations";
 import Orders from "./pages/Orders";
 import Reports from "./pages/Reports";
 import Sales from "./pages/Sales";
+import Products from "./pages/Products";
 
 import OrdersApprovals from "./pages/OrdersApprovals";
 import Receive from "./pages/Receive";
@@ -37,6 +38,7 @@ export const router = createBrowserRouter([
       { path: "admin/sales", element: <Sales /> },
       { path: "admin/reports", element: <Reports /> },
       { path: "admin/users", element: <Users /> },
+      { path: "admin/products", element: <Products /> },
 
       // SUCURSAL
       { path: "sucursal", element: <BranchDashboard /> },
