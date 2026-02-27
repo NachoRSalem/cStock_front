@@ -85,6 +85,7 @@ export function Layout() {
 
       // Admin
       { to: "/admin/locations", label: "Sucursales", icon: <MapPin className="h-5 w-5" />, roles: ["admin"] },
+      { to: "/admin/stock", label: "Stock Global", icon: <Warehouse className="h-5 w-5" />, roles: ["admin"] },
       { to: "/admin/products", label: "Productos", icon: <Package className="h-5 w-5" />, roles: ["admin"] },
       { to: "/admin/orders", label: "Pedidos", icon: <FileText className="h-5 w-5" />, roles: ["admin"] },
       { to: "/admin/sales", label: "Ventas", icon: <ShoppingCart className="h-5 w-5" />, roles: ["admin"] },

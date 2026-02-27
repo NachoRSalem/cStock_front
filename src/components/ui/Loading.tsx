@@ -13,6 +13,10 @@ const sizeClasses = {
   lg: 'h-12 w-12',
 };
 
+interface PageLoaderProps {
+  message?: string;
+}
+
 export function LoadingSpinner({ size = 'md', className, text }: LoadingSpinnerProps) {
   return (
     <div className={clsx('flex flex-col items-center justify-center gap-3', className)}>
@@ -22,10 +26,10 @@ export function LoadingSpinner({ size = 'md', className, text }: LoadingSpinnerP
   );
 }
 
-export function PageLoader() {
+export function PageLoader({ message }: PageLoaderProps) {
   return (
     <div className="flex items-center justify-center min-h-[400px]">
-      <LoadingSpinner size="lg" text="Cargando..." />
+      <LoadingSpinner size="lg" text={message || "Cargando..."} />
     </div>
   );
 }

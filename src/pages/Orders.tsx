@@ -9,12 +9,15 @@ import {
   rechazarPedido, 
   recibirPedido,
   getPedido,
+  updatePedido,
+  deletePedido,
   type Pedido, 
   type PedidoItemCreate,
 } from "../api/orders";
 import { listProductos, type Producto } from "../api/products";
 import { listSucursales, type Sucursal, type SubUbicacion } from "../api/locations";
 import { tokenStorage } from "../utils/storage";
+import { generarOrdenCompraPDF, descargarPDF } from "../utils/pdfGenerator";
 import { 
   Card, 
   CardHeader, 
@@ -31,7 +34,7 @@ import {
   Alert,
   ConfirmDialog
 } from "../components/ui";
-import { Plus, Send, Check, X, Package, Trash2, Calendar, MapPin } from "lucide-react";
+import { Plus, Send, Check, X, Package, Trash2, Calendar, MapPin, FileDown, Edit } from "lucide-react";
 import clsx from 'clsx';
 
 type PedidoItemForm = {
@@ -64,7 +67,12 @@ export default function Orders() {
   const [showEnviarConfirm, setShowEnviarConfirm] = useState(false);
   const [showAprobarConfirm, setShowAprobarConfirm] = useState(false);
   const [showRechazarConfirm, setShowRechazarConfirm] = useState(false);
+  const [showCancelarConfirm, setShowCancelarConfirm] = useState(false);
   const [pedidoAction, setPedidoAction] = useState<number | null>(null);
+
+  // Estados para edición de pedido
+  const [showEdit, setShowEdit] = useState(false);
+  const [pedidoToEdit, setPedidoToEdit] = useState<Pedido | null>(null);
 
   const session = tokenStorage.getSession();
   const isAdmin = session?.rol === "admin";
@@ -131,6 +139,21 @@ export default function Orders() {
     setItems(items.filter((_, i) => i !== index));
   }
 
+  async function handleDescargarPDF(pedido: Pedido) {
+    try {
+      const pedidoCompleto = await getPedido(pedido.id);
+      const sucursalNombre = sucursales.find(s => s.id === pedidoCompleto.destino)?.nombre;
+      const { blob, fileName } = generarOrdenCompraPDF({ 
+        pedido: pedidoCompleto, 
+        sucursalDestino: sucursalNombre 
+      });
+      descargarPDF(blob, fileName);
+    } catch (error) {
+      console.error('Error generando PDF:', error);
+      setErr('Error al generar el PDF');
+    }
+  }
+
   function updateItem(index: number, field: keyof PedidoItemForm, value: any) {
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
@@ -166,8 +189,24 @@ export default function Orders() {
         };
       });
 
-      await createPedido({ destino, items: itemsToSend });
+      const pedidoCreado = await createPedido({ destino, items: itemsToSend });
       await loadData();
+      
+      // Si es admin, generar y descargar PDF automáticamente
+      if (isAdmin && pedidoCreado.id) {
+        try {
+          const pedidoCompleto = await getPedido(pedidoCreado.id);
+          const sucursalNombre = sucursales.find(s => s.id === destino)?.nombre;
+          const { blob, fileName } = generarOrdenCompraPDF({ 
+            pedido: pedidoCompleto, 
+            sucursalDestino: sucursalNombre 
+          });
+          descargarPDF(blob, fileName);
+        } catch (pdfError) {
+          console.error('Error generando PDF:', pdfError);
+        }
+      }
+      
       setShowCreate(false);
       setItems([]);
       setDestino(isAdmin ? null : session?.sucursal ?? null);
@@ -175,6 +214,91 @@ export default function Orders() {
       setErr(e?.message ?? "Error creando pedido");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function openEditModal(pedido: Pedido) {
+    try {
+      setBusy(true);
+      const pedidoCompleto = await getPedido(pedido.id);
+      setPedidoToEdit(pedidoCompleto);
+      setDestino(pedidoCompleto.destino);
+      // Convertir los items del pedido a formato de formulario
+      const itemsForm: PedidoItemForm[] = pedidoCompleto.items.map(item => ({
+        producto: item.producto,
+        cantidad: item.cantidad,
+        precio_costo_momento: item.precio_costo_momento
+      }));
+      setItems(itemsForm);
+      setShowEdit(true);
+      setErr(null);
+    } catch (e: any) {
+      setErr(e?.message ?? "Error cargando pedido");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onUpdate() {
+    if (!pedidoToEdit) return;
+    if (!destino) {
+      setErr("Seleccioná un destino");
+      return;
+    }
+    if (items.length === 0) {
+      setErr("Agregá al menos un producto");
+      return;
+    }
+    const productosNoSeleccionados = items.some(item => !item.producto || item.producto === 0);
+    if (productosNoSeleccionados) {
+      setErr("Todos los productos deben estar seleccionados");
+      return;
+    }
+
+    setBusy(true);
+    setErr(null);
+    try {
+      const itemsToSend: PedidoItemCreate[] = items.map(item => {
+        const producto = productos.find(p => p.id === item.producto);
+        return {
+          producto: item.producto,
+          cantidad: item.cantidad,
+          precio_costo_momento: item.precio_costo_momento || producto?.costo_compra.toString() || "0"
+        };
+      });
+
+      await updatePedido(pedidoToEdit.id, { destino, items: itemsToSend });
+      await loadData();
+      setShowEdit(false);
+      setItems([]);
+      setPedidoToEdit(null);
+      setDestino(isAdmin ? null : session?.sucursal ?? null);
+    } catch (e: any) {
+      setErr(e?.message ?? "Error actualizando pedido");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onCancelar(id: number) {
+    setPedidoAction(id);
+    setShowCancelarConfirm(true);
+  }
+
+  async function confirmCancelar() {
+    if (!pedidoAction) return;
+    
+    setBusy(true);
+    setErr(null);
+    setShowCancelarConfirm(false);
+    try {
+      await deletePedido(pedidoAction);
+      await loadData();
+    } catch (e: any) {
+      setErr(e?.message ?? "Error cancelando pedido");
+    } finally {
+      setBusy(false);
+      setPedidoAction(null);
     }
   }
 
@@ -214,6 +338,19 @@ export default function Orders() {
     try {
       await aprobarPedido(pedidoAction);
       await loadData();
+      
+      // Generar y descargar PDF automáticamente
+      try {
+        const pedidoCompleto = await getPedido(pedidoAction);
+        const sucursalNombre = sucursales.find(s => s.id === pedidoCompleto.destino)?.nombre;
+        const { blob, fileName } = generarOrdenCompraPDF({ 
+          pedido: pedidoCompleto, 
+          sucursalDestino: sucursalNombre 
+        });
+        descargarPDF(blob, fileName);
+      } catch (pdfError) {
+        console.error('Error generando PDF:', pdfError);
+      }
     } catch (e: any) {
       setErr(e?.message ?? "Error aprobando pedido");
     } finally {
@@ -508,6 +645,162 @@ export default function Orders() {
         </Card>
       )}
 
+      {/* Formulario editar pedido */}
+      {showEdit && pedidoToEdit && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Editar pedido #{pedidoToEdit.id}</CardTitle>
+            <CardDescription>Modificá los productos del pedido en borrador</CardDescription>
+          </CardHeader>
+          <CardBody className="space-y-6">
+            {/* Destino */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-neutral-700">
+                Destino <span className="text-red-500">*</span>
+              </label>
+              {!isAdmin ? (
+                <div className="flex items-center gap-3 p-4 bg-neutral-50 border border-neutral-200 rounded-lg">
+                  <MapPin className="h-5 w-5 text-primary-600" />
+                  <div>
+                    <div className="font-medium text-neutral-900">
+                      {sucursales.find(s => s.id === destino)?.nombre || "Cargando..."}
+                    </div>
+                    <div className="text-sm text-neutral-500">
+                      {sucursales.find(s => s.id === destino)?.tipo || ""}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <select 
+                  value={destino?.toString() ?? ""} 
+                  onChange={(e) => setDestino(Number(e.target.value))}
+                  className={clsx(
+                    'w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all',
+                    'bg-white text-neutral-900',
+                    'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent',
+                    !destino
+                      ? 'border-red-300 focus:ring-red-500'
+                      : 'border-neutral-300 hover:border-neutral-400'
+                  )}
+                >
+                  <option value="">Seleccionar sucursal...</option>
+                  {sucursales.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.nombre} ({s.tipo})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Productos */}
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-neutral-700">
+                Productos <span className="text-red-500">*</span>
+              </label>
+              
+              {items.length === 0 ? (
+                <div className="text-center py-8 border-2 border-dashed border-neutral-300 rounded-lg">
+                  <Package className="h-12 w-12 text-neutral-400 mx-auto mb-2" />
+                  <p className="text-sm text-neutral-500">No hay productos agregados</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {items.map((item, index) => {
+                    const producto = productos.find(p => p.id === item.producto);
+                    return (
+                      <div 
+                        key={index} 
+                        className="flex gap-3 p-4 bg-white border border-neutral-200 rounded-lg hover:border-primary-300 transition-colors"
+                      >
+                        <div className="flex-1 space-y-3">
+                          <select
+                            value={item.producto || ""} 
+                            onChange={(e) => {
+                              const prodId = Number(e.target.value);
+                              const prod = productos.find(p => p.id === prodId);
+                              const newItems = [...items];
+                              newItems[index] = {
+                                ...newItems[index],
+                                producto: prodId,
+                                precio_costo_momento: prod ? prod.costo_compra.toString() : newItems[index].precio_costo_momento
+                              };
+                              setItems(newItems);
+                            }}
+                            className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                          >
+                            <option value="">Seleccionar producto...</option>
+                            {productos.map(p => (
+                              <option key={p.id} value={p.id}>
+                                {p.nombre} - {p.categoria_nombre || "Sin categoría"} - ${p.costo_compra}
+                              </option>
+                            ))}
+                          </select>
+                          
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs text-neutral-500 mb-1">Cantidad</label>
+                              <Input
+                                type="number" 
+                                placeholder="Cantidad" 
+                                value={item.cantidad}
+                                onChange={(e) => updateItem(index, "cantidad", Number(e.target.value))}
+                                min="1"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-neutral-500 mb-1">Costo unitario</label>
+                              <Input
+                                type="number" 
+                                value={item.precio_costo_momento}
+                                readOnly
+                                disabled
+                                className="bg-neutral-50"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => removeItem(index)}
+                          className="self-start"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              
+              <Button 
+                variant="outline" 
+                onClick={addItem} 
+                disabled={productos.length === 0}
+                className="w-full"
+              >
+                <Plus className="h-4 w-4" />
+                Agregar producto
+              </Button>
+            </div>
+          </CardBody>
+          <CardFooter className="flex gap-3 justify-end">
+            <Button variant="ghost" onClick={() => {
+              setShowEdit(false);
+              setPedidoToEdit(null);
+              setItems([]);
+              setDestino(isAdmin ? null : session?.sucursal ?? null);
+            }} disabled={busy}>
+              Cancelar
+            </Button>
+            <Button onClick={onUpdate} disabled={busy || !destino || items.length === 0} loading={busy}>
+              Actualizar pedido
+            </Button>
+          </CardFooter>
+        </Card>
+      )}
+
       {/* Listado por estados - orden personalizado */}
       {ordenEstados.map(estado => {
         const pedidosEstado = pedidosPorEstado[estado];
@@ -529,16 +822,27 @@ export default function Orders() {
                 <Card key={pedido.id} className="hover:shadow-soft-lg transition-shadow">
                   <CardHeader>
                     <div className="flex items-start justify-between">
-                      <div>
+                      <div className="flex-1">
                         <CardTitle className="text-base">Pedido #{pedido.id}</CardTitle>
                         <CardDescription className="flex items-center gap-1 mt-1">
                           <MapPin className="h-3 w-3" />
                           {pedido.destino_nombre}
                         </CardDescription>
                       </div>
-                      <Badge variant={estadoBadgeVariant[pedido.estado as keyof typeof estadoBadgeVariant]}>
-                        {estadoLabels[pedido.estado as keyof typeof estadoLabels]}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {(pedido.estado === 'aprobado' || pedido.estado === 'recibido') && (
+                          <button
+                            onClick={() => handleDescargarPDF(pedido)}
+                            className="p-2 hover:bg-blue-50 rounded-lg transition-colors group"
+                            title="Descargar PDF"
+                          >
+                            <FileDown className="h-4 w-4 text-blue-600 group-hover:text-blue-700" />
+                          </button>
+                        )}
+                        <Badge variant={estadoBadgeVariant[pedido.estado as keyof typeof estadoBadgeVariant]}>
+                          {estadoLabels[pedido.estado as keyof typeof estadoLabels]}
+                        </Badge>
+                      </div>
                     </div>
                   </CardHeader>
                   
@@ -588,15 +892,35 @@ export default function Orders() {
                     (pedido.estado === "aprobado" && !isAdmin)) && (
                     <CardFooter className="flex gap-2">
                       {pedido.estado === "borrador" && (
-                        <Button 
-                          onClick={() => onEnviarARevision(pedido.id)}
-                          disabled={busy}
-                          className="w-full"
-                          size="sm"
-                        >
-                          <Send className="h-4 w-4" />
-                          Enviar a revisión
-                        </Button>
+                        <>
+                          <Button 
+                            onClick={() => openEditModal(pedido)}
+                            disabled={busy}
+                            size="sm"
+                            variant="outline"
+                          >
+                            <Edit className="h-4 w-4" />
+                            Editar
+                          </Button>
+                          <Button 
+                            onClick={() => onEnviarARevision(pedido.id)}
+                            disabled={busy}
+                            className="flex-1"
+                            size="sm"
+                          >
+                            <Send className="h-4 w-4" />
+                            Enviar a revisión
+                          </Button>
+                          <Button 
+                            onClick={() => onCancelar(pedido.id)}
+                            disabled={busy}
+                            size="sm"
+                            variant="danger"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Cancelar
+                          </Button>
+                        </>
                       )}
                       {pedido.estado === "pendiente" && isAdmin && (
                         <>
@@ -810,6 +1134,20 @@ export default function Orders() {
         title="Rechazar pedido"
         message="¿Rechazar este pedido? Esta acción no se puede deshacer."
         confirmText="Rechazar"
+        variant="danger"
+        loading={busy}
+      />
+
+      <ConfirmDialog
+        open={showCancelarConfirm}
+        onClose={() => {
+          setShowCancelarConfirm(false);
+          setPedidoAction(null);
+        }}
+        onConfirm={confirmCancelar}
+        title="Cancelar pedido"
+        message="¿Eliminar este pedido borrador? Esta acción no se puede deshacer."
+        confirmText="Eliminar"
         variant="danger"
         loading={busy}
       />

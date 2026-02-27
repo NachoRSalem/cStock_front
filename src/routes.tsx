@@ -16,6 +16,7 @@ import Products from "./pages/Products";
 
 import Users from "./pages/Users";
 import Stock from "./pages/Stock";
+import AdminStockView from "./pages/AdminStockView";
 import NotFound from "./pages/NotFound";
 
 export const router = createBrowserRouter([
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
       // ADMIN 
       { path: "admin", element: <AdminDashboard /> },
       { path: "admin/locations", element: <Locations /> },
+      { path: "admin/stock", element: <AdminStockView /> },
       { path: "admin/orders", element: <Orders /> },
       { path: "admin/sales", element: <Sales /> },
       { path: "admin/reports", element: <Reports /> },

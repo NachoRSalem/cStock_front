@@ -67,3 +67,11 @@ export function recibirPedido(id: number, body: PedidoRecibirBody) {
 export function getPedido(id: number) {
   return apiFetch<Pedido>(`/api/inventory/pedidos/${id}/`);
 }
+
+export function updatePedido(id: number, body: PedidoCreateBody) {
+  return apiFetch<Pedido>(`/api/inventory/pedidos/${id}/`, { method: "PUT", body });
+}
+
+export function deletePedido(id: number) {
+  return apiFetch<{ status: string }>(`/api/inventory/pedidos/${id}/`, { method: "DELETE" });
+}
