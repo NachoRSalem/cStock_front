@@ -1,5 +1,6 @@
 // src/pages/Orders.tsx
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { createPedido, enviarARevision, listPedidos, type Pedido, type PedidoItemCreate } from "../api/orders";
 import { listProductos, type Producto } from "../api/products";
 import { listSucursales, type Sucursal } from "../api/locations";
@@ -12,6 +13,7 @@ type PedidoItemForm = {
 };
 
 export default function Orders() {
+  const navigate = useNavigate();
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
@@ -150,10 +152,13 @@ export default function Orders() {
     }
   }
 
+  // Orden personalizado: aprobado primero (para recibir), luego el resto
+  const ordenEstados = ["aprobado", "borrador", "pendiente", "recibido", "rechazado"] as const;
+  
   const pedidosPorEstado = {
+    aprobado: pedidos.filter(p => p.estado === "aprobado"),
     borrador: pedidos.filter(p => p.estado === "borrador"),
     pendiente: pedidos.filter(p => p.estado === "pendiente"),
-    aprobado: pedidos.filter(p => p.estado === "aprobado"),
     recibido: pedidos.filter(p => p.estado === "recibido"),
     rechazado: pedidos.filter(p => p.estado === "rechazado")
   };
@@ -374,8 +379,9 @@ export default function Orders() {
         </section>
       )}
 
-      {/* Listado por estados */}
-      {Object.entries(pedidosPorEstado).map(([estado, pedidosEstado]) => {
+      {/* Listado por estados - orden personalizado */}
+      {ordenEstados.map(estado => {
+        const pedidosEstado = pedidosPorEstado[estado];
         if (pedidosEstado.length === 0) return null;
         
         return (
@@ -415,6 +421,16 @@ export default function Orders() {
                           style={{ fontSize: "0.875rem", padding: "0.5rem 1rem" }}
                         >
                           Enviar a revisión
+                        </button>
+                      )}
+                      {pedido.estado === "aprobado" && !isAdmin && (
+                        <button 
+                          className="btn btn--primary" 
+                          onClick={() => navigate(`/sucursal/receive?pedido=${pedido.id}`)}
+                          disabled={busy}
+                          style={{ fontSize: "0.875rem", padding: "0.5rem 1rem", backgroundColor: "#388e3c" }}
+                        >
+                          📦 Recibir pedido
                         </button>
                       )}
                     </div>
