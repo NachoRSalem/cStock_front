@@ -16,6 +16,7 @@ import {
 } from "../api/orders";
 import { listProductos, type Producto } from "../api/products";
 import { listSucursales, type Sucursal, type SubUbicacion } from "../api/locations";
+import { listStock, type Stock as StockItem } from "../api/stock";
 import { tokenStorage } from "../utils/storage";
 import { generarOrdenCompraPDF, descargarPDF } from "../utils/pdfGenerator";
 import { 
@@ -65,10 +66,17 @@ export default function Orders() {
 
   // Estados para ConfirmDialogs
   const [showEnviarConfirm, setShowEnviarConfirm] = useState(false);
-  const [showAprobarConfirm, setShowAprobarConfirm] = useState(false);
   const [showRechazarConfirm, setShowRechazarConfirm] = useState(false);
   const [showCancelarConfirm, setShowCancelarConfirm] = useState(false);
   const [pedidoAction, setPedidoAction] = useState<number | null>(null);
+
+  // Estados para aprobación con selección de almacén
+  const [showAprobarOrigenModal, setShowAprobarOrigenModal] = useState(false);
+  const [showAprobarAlmacenModal, setShowAprobarAlmacenModal] = useState(false);
+  const [pedidoToApprove, setPedidoToApprove] = useState<Pedido | null>(null);
+  const [almacenUbicaciones, setAlmacenUbicaciones] = useState<Record<number, number>>({}); // pedidoitem_id -> sub_ubicacion_id
+  const [almacenesDisponibles, setAlmacenesDisponibles] = useState<Sucursal[]>([]); // ubicaciones tipo almacen
+  const [almacenStock, setAlmacenStock] = useState<StockItem[]>([]); // stock actual del almacén
 
   // Estados para edición de pedido
   const [showEdit, setShowEdit] = useState(false);
@@ -76,6 +84,10 @@ export default function Orders() {
 
   const session = tokenStorage.getSession();
   const isAdmin = session?.rol === "admin";
+
+  // Helper: ¿el destino del pedido es un almacén?
+  const isAlmacenDestino = (pedido: Pedido) =>
+    sucursales.find(s => s.id === pedido.destino)?.tipo === 'almacen';
 
   useEffect(() => {
     loadData();
@@ -325,23 +337,65 @@ export default function Orders() {
   }
 
   function onAprobar(id: number) {
-    setPedidoAction(id);
-    setShowAprobarConfirm(true);
+    // En lugar de abrir directamente el confirm, primero cargamos el pedido completo
+    const pedido = pedidos.find(p => p.id === id);
+    if (pedido) {
+      setPedidoToApprove(pedido);
+      setShowAprobarOrigenModal(true);
+    }
   }
 
-  async function confirmAprobar() {
-    if (!pedidoAction) return;
+  async function handleAprobarDesdeAlmacen() {
+    // Usuario elige proveer desde almacén, abrir modal para seleccionar sububicaciones
+    setShowAprobarOrigenModal(false);
+    if (!pedidoToApprove) return;
+    
+    try {
+      setBusy(true);
+      // Cargar el pedido completo con items
+      const pedidoCompleto = await getPedido(pedidoToApprove.id);
+      setPedidoToApprove(pedidoCompleto);
+      
+      // Filtrar las ubicaciones de tipo 'almacen' ya cargadas
+      const almacenes = sucursales.filter(s => s.tipo === 'almacen');
+      if (almacenes.length === 0) {
+        setErr("No hay ninguna ubicación de tipo 'Almacén Central' registrada. Creala primero desde la sección Ubicaciones.");
+        setBusy(false);
+        setShowAprobarOrigenModal(true); // reabrimos para que no quede en blanco
+        return;
+      }
+      setAlmacenesDisponibles(almacenes);
+      
+      // Cargar el stock actual del almacén para mostrar disponibilidad
+      const stockResults = await Promise.all(
+        almacenes.map(a => listStock({ ubicacion: a.id }))
+      );
+      setAlmacenStock(stockResults.flat());
+      
+      // Inicializar almacenUbicaciones vacío
+      setAlmacenUbicaciones({});
+      setShowAprobarAlmacenModal(true);
+    } catch (e: any) {
+      setErr(e?.message ?? "Error cargando pedido");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAprobarExterno() {
+    // Usuario elige proveer externamente (distribuidor)
+    setShowAprobarOrigenModal(false);
+    if (!pedidoToApprove) return;
     
     setBusy(true);
     setErr(null);
-    setShowAprobarConfirm(false);
     try {
-      await aprobarPedido(pedidoAction);
+      await aprobarPedido(pedidoToApprove.id, { provisto_desde_almacen: false });
       await loadData();
       
       // Generar y descargar PDF automáticamente
       try {
-        const pedidoCompleto = await getPedido(pedidoAction);
+        const pedidoCompleto = await getPedido(pedidoToApprove.id);
         const sucursalNombre = sucursales.find(s => s.id === pedidoCompleto.destino)?.nombre;
         const { blob, fileName } = generarOrdenCompraPDF({ 
           pedido: pedidoCompleto, 
@@ -355,7 +409,56 @@ export default function Orders() {
       setErr(e?.message ?? "Error aprobando pedido");
     } finally {
       setBusy(false);
-      setPedidoAction(null);
+      setPedidoToApprove(null);
+    }
+  }
+
+  async function confirmAprobarDesdeAlmacen() {
+    if (!pedidoToApprove) return;
+    
+    // Validar que todos los items tengan sub_ubicacion_origen asignada
+    const itemsSinUbicacion = pedidoToApprove.items.filter(item => !almacenUbicaciones[item.id]);
+    if (itemsSinUbicacion.length > 0) {
+      setErr("Debes asignar una sub-ubicación del almacén para todos los productos");
+      return;
+    }
+    
+    setBusy(true);
+    setErr(null);
+    setShowAprobarAlmacenModal(false);
+    try {
+      const items = pedidoToApprove.items.map(item => ({
+        id: item.id,
+        sub_ubicacion_origen: almacenUbicaciones[item.id]
+      }));
+      
+      await aprobarPedido(pedidoToApprove.id, {
+        provisto_desde_almacen: true,
+        items
+      });
+      
+      await loadData();
+      
+      // Generar y descargar PDF automáticamente
+      try {
+        const pedidoCompleto = await getPedido(pedidoToApprove.id);
+        const sucursalNombre = sucursales.find(s => s.id === pedidoCompleto.destino)?.nombre;
+        const { blob, fileName } = generarOrdenCompraPDF({ 
+          pedido: pedidoCompleto, 
+          sucursalDestino: sucursalNombre 
+        });
+        descargarPDF(blob, fileName);
+      } catch (pdfError) {
+        console.error('Error generando PDF:', pdfError);
+      }
+    } catch (e: any) {
+      setErr(e?.message ?? "Error aprobando pedido desde almacén");
+    } finally {
+      setBusy(false);
+      setPedidoToApprove(null);
+      setAlmacenUbicaciones({});
+      setAlmacenesDisponibles([]);
+      setAlmacenStock([]);
     }
   }
 
@@ -384,11 +487,11 @@ export default function Orders() {
   async function openReceiveModal(pedido: Pedido) {
     setErr(null);
     try {
-      // Cargar sub-ubicaciones de la sucursal
+      // Cargar sub-ubicaciones del destino del pedido (funciona tanto para sucursales como para almacén)
       const sucursalesData = await listSucursales();
-      const miSucursal = sucursalesData.find((s) => s.id === session?.sucursal);
-      if (miSucursal && miSucursal.sub_ubicaciones) {
-        setSubUbicaciones(miSucursal.sub_ubicaciones);
+      const destino = sucursalesData.find((s) => s.id === pedido.destino);
+      if (destino && destino.sub_ubicaciones) {
+        setSubUbicaciones(destino.sub_ubicaciones);
       }
 
       // Cargar pedido completo
@@ -842,6 +945,11 @@ export default function Orders() {
                         <Badge variant={estadoBadgeVariant[pedido.estado as keyof typeof estadoBadgeVariant]}>
                           {estadoLabels[pedido.estado as keyof typeof estadoLabels]}
                         </Badge>
+                        {pedido.provisto_desde_almacen && (pedido.estado === 'aprobado' || pedido.estado === 'recibido') && (
+                          <Badge variant="pending" title="Provisto desde el almacén propio">
+                            Almacén
+                          </Badge>
+                        )}
                       </div>
                     </div>
                   </CardHeader>
@@ -889,7 +997,7 @@ export default function Orders() {
                   
                   {(pedido.estado === "borrador" || 
                     (pedido.estado === "pendiente" && isAdmin) || 
-                    (pedido.estado === "aprobado" && !isAdmin)) && (
+                    (pedido.estado === "aprobado" && (!isAdmin || isAlmacenDestino(pedido)))) && (
                     <CardFooter className="flex gap-2">
                       {pedido.estado === "borrador" && (
                         <>
@@ -946,7 +1054,7 @@ export default function Orders() {
                           </Button>
                         </>
                       )}
-                      {pedido.estado === "aprobado" && !isAdmin && (
+                      {pedido.estado === "aprobado" && (!isAdmin || isAlmacenDestino(pedido)) && (
                         <Button 
                           onClick={() => openReceiveModal(pedido)}
                           disabled={busy}
@@ -975,6 +1083,163 @@ export default function Orders() {
           </CardBody>
         </Card>
       )}
+
+      {/* Modal: Elegir origen del pedido (almacén vs externo) */}
+      <Modal
+        open={showAprobarOrigenModal}
+        onClose={() => {
+          setShowAprobarOrigenModal(false);
+          setPedidoToApprove(null);
+        }}
+        title="Aprobar pedido"
+        description={`¿Cómo se proveerá el Pedido #${pedidoToApprove?.id}?`}
+        size="sm"
+      >
+        <div className="space-y-3 py-2">
+          <button
+            onClick={handleAprobarDesdeAlmacen}
+            disabled={busy}
+            className="w-full flex items-start gap-4 p-4 border-2 border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors text-left"
+          >
+            <div className="p-2 bg-emerald-100 rounded-lg mt-0.5">
+              <Package className="h-5 w-5 text-emerald-600" />
+            </div>
+            <div>
+              <div className="font-semibold text-emerald-800">Desde el almacén</div>
+              <div className="text-sm text-emerald-600">Se descuenta stock del almacén propio y se envía a la sucursal</div>
+            </div>
+          </button>
+
+          <button
+            onClick={handleAprobarExterno}
+            disabled={busy}
+            className="w-full flex items-start gap-4 p-4 border-2 border-primary-300 bg-primary-50 hover:bg-primary-100 rounded-xl transition-colors text-left"
+          >
+            <div className="p-2 bg-primary-100 rounded-lg mt-0.5">
+              <Send className="h-5 w-5 text-primary-600" />
+            </div>
+            <div>
+              <div className="font-semibold text-primary-800">Externo (distribuidor)</div>
+              <div className="text-sm text-primary-600">No afecta el stock del almacén, el pedido se gestiona con el proveedor</div>
+            </div>
+          </button>
+        </div>
+      </Modal>
+
+      {/* Modal: Seleccionar sub-ubicación de origen del almacén */}
+      <Modal
+        open={showAprobarAlmacenModal}
+        onClose={() => {
+          setShowAprobarAlmacenModal(false);
+          setPedidoToApprove(null);
+          setAlmacenUbicaciones({});
+          setAlmacenesDisponibles([]);
+          setAlmacenStock([]);
+        }}
+        title="Asignar origen desde almacén"
+        description="Indicá desde qué sub-ubicación del almacén se tomará cada producto"
+        size="lg"
+      >
+        {pedidoToApprove && (
+          <div className="space-y-4">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+              <div className="text-sm font-medium text-emerald-800">
+                Pedido #{pedidoToApprove.id} → {pedidoToApprove.destino_nombre}
+              </div>
+              <div className="text-xs text-emerald-600 mt-0.5">
+                Asigná una sub-ubicación del almacén para cada producto
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {pedidoToApprove.items.map((item) => {
+                // Buscar stock disponible en cada sub-ubicación para este producto
+                const stockPorSubUbicacion = Object.fromEntries(
+                  almacenStock
+                    .filter(s => s.producto === item.producto)
+                    .map(s => [s.sub_ubicacion, s.cantidad])
+                );
+                const subUbicSelected = almacenUbicaciones[item.id];
+                const stockDisponible = subUbicSelected ? (stockPorSubUbicacion[subUbicSelected] ?? 0) : null;
+                const stockInsuficiente = stockDisponible !== null && stockDisponible < item.cantidad;
+
+                return (
+                <div key={item.id} className="flex items-center gap-3 p-3 bg-white border border-neutral-200 rounded-lg">
+                  <div className="flex-1">
+                    <div className="font-medium text-sm text-neutral-900">{item.producto_nombre}</div>
+                    <div className="text-xs text-neutral-500">Cantidad pedida: {item.cantidad}</div>
+                    {stockInsuficiente && (
+                      <div className="text-xs text-red-600 font-medium mt-0.5">
+                        ⚠️ Stock insuficiente (disponible: {stockDisponible})
+                      </div>
+                    )}
+                    {stockDisponible !== null && !stockInsuficiente && (
+                      <div className="text-xs text-emerald-600 font-medium mt-0.5">
+                        ✓ Disponible: {stockDisponible} unidades
+                      </div>
+                    )}
+                  </div>
+                  <select
+                    value={almacenUbicaciones[item.id] ?? ""}
+                    onChange={(e) => setAlmacenUbicaciones(prev => ({
+                      ...prev,
+                      [item.id]: Number(e.target.value)
+                    }))}
+                    className={`px-3 py-2 rounded-xl border text-sm bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${
+                      stockInsuficiente ? 'border-red-400' : 'border-neutral-300'
+                    }`}
+                  >
+                    <option value="">Sub-ubicación origen...</option>
+                    {almacenesDisponibles.map(almacen => (
+                      <optgroup key={almacen.id} label={almacen.nombre}>
+                        {almacen.sub_ubicaciones.map(sub => {
+                          const qty = stockPorSubUbicacion[sub.id] ?? 0;
+                          return (
+                            <option key={sub.id} value={sub.id}>
+                              {sub.nombre} ({sub.tipo}) — stock: {qty}
+                            </option>
+                          );
+                        })}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+              );})}
+            </div>
+
+            <ModalFooter>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setShowAprobarAlmacenModal(false);
+                  setPedidoToApprove(null);
+                  setAlmacenUbicaciones({});
+                  setAlmacenesDisponibles([]);
+                  setAlmacenStock([]);
+                }}
+                disabled={busy}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="success"
+                onClick={confirmAprobarDesdeAlmacen}
+                disabled={busy || pedidoToApprove.items.some(item => {
+                  if (!almacenUbicaciones[item.id]) return true;
+                  const qty = almacenStock.find(
+                    s => s.producto === item.producto && s.sub_ubicacion === almacenUbicaciones[item.id]
+                  )?.cantidad ?? 0;
+                  return qty < item.cantidad;
+                })}
+                loading={busy}
+              >
+                <Check className="h-4 w-4" />
+                Aprobar y descontar almacén
+              </Button>
+            </ModalFooter>
+          </div>
+        )}
+      </Modal>
 
       {/* Modal para recibir pedido */}
       <Modal 
@@ -1107,20 +1372,6 @@ export default function Orders() {
         message="¿Enviar este pedido a revisión del administrador?"
         confirmText="Enviar"
         variant="info"
-        loading={busy}
-      />
-
-      <ConfirmDialog
-        open={showAprobarConfirm}
-        onClose={() => {
-          setShowAprobarConfirm(false);
-          setPedidoAction(null);
-        }}
-        onConfirm={confirmAprobar}
-        title="Aprobar pedido"
-        message="¿Confirmar la aprobación de este pedido?"
-        confirmText="Aprobar"
-        variant="success"
         loading={busy}
       />
 

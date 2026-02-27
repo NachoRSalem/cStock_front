@@ -9,6 +9,7 @@ export type PedidoItem = {
   cantidad: number;
   precio_costo_momento: string;
   sub_ubicacion_destino: number | null;
+  sub_ubicacion_origen: number | null;
 };
 
 export type Pedido = {
@@ -19,6 +20,7 @@ export type Pedido = {
   estado: PedidoEstado;
   fecha_creacion: string;
   items: PedidoItem[];
+  provisto_desde_almacen: boolean;
 };
 
 export type PedidoItemCreate = { 
@@ -41,6 +43,16 @@ export type PedidoRecibirBody = {
   items: PedidoRecibirItem[] 
 };
 
+export type PedidoAprobarItem = {
+  id: number;
+  sub_ubicacion_origen: number;
+};
+
+export type PedidoAprobarBody = {
+  provisto_desde_almacen: boolean;
+  items?: PedidoAprobarItem[];
+};
+
 export function listPedidos() {
   return apiFetch<Pedido[]>("/api/inventory/pedidos/");
 }
@@ -53,8 +65,11 @@ export function enviarARevision(id: number) {
   return apiFetch<{ status: string }>(`/api/inventory/pedidos/${id}/enviar_a_revision/`, { method: "POST" });
 }
 
-export function aprobarPedido(id: number) {
-  return apiFetch<{ status: string }>(`/api/inventory/pedidos/${id}/aprobar/`, { method: "POST" });
+export function aprobarPedido(id: number, body?: PedidoAprobarBody) {
+  return apiFetch<{ status: string }>(`/api/inventory/pedidos/${id}/aprobar/`, { 
+    method: "POST", 
+    body: body || { provisto_desde_almacen: false } 
+  });
 }
 
 export function rechazarPedido(id: number) {
