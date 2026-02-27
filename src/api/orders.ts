@@ -64,3 +64,6 @@ export function rechazarPedido(id: number) {
 export function recibirPedido(id: number, body: PedidoRecibirBody) {
   return apiFetch<{ status: string }>(`/api/inventory/pedidos/${id}/recibir/`, { method: "POST", body });
 }
+export function getPedido(id: number) {
+  return apiFetch<Pedido>(`/api/inventory/pedidos/${id}/`);
+}
