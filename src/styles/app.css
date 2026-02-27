@@ -1,425 +1,64 @@
-/* =========================================
-   RESET & VARIABLES
-========================================= */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-:root {
-  --bg: #f6f7f9;
-  --panel: #ffffff;
-  --text: #111827;
-  --muted: #6b7280;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-  --border: #e5e7eb;
-  --border-strong: #d1d5db;
-
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-
-  --danger: #dc2626;
-  --success: #16a34a;
-
-  --radius: 12px;
-  --shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
-
-  --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html, body {
-  height: 100%;
-}
-
-body {
-  margin: 0;
-  font-family: var(--font);
-  background: var(--bg);
-  color: var(--text);
-}
-
-a {
-  text-decoration: none;
-  color: inherit;
-}
-/* =========================================
-   HELPERS
-========================================= */
-
-.stack {
-  display: grid;
-  gap: 16px;
-}
-
-.row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.row--between {
-  justify-content: space-between;
-}
-
-.muted {
-  color: var(--muted);
-}
-
-.mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-.badge {
-  font-size: 12px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: #f3f4f6;
-  border: 1px solid var(--border);
-  color: var(--muted);
-}
 
 /* =========================================
-   LAYOUT
+   GLOBAL STYLES
 ========================================= */
-
-.app-shell {
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: 260px 1fr;
-}
-
-.sidebar {
-  background: var(--panel);
-  border-right: 1px solid var(--border);
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-}
-
-.sidebar__header {
-  margin-bottom: 20px;
-}
-
-.sidebar__title {
-  font-size: 16px;
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-
-.sidebar__meta {
-  font-size: 12px;
-  display: grid;
-  gap: 2px;
-  color: var(--muted);
-}
-
-.sidebar__nav {
-  display: grid;
-  gap: 6px;
-}
-
-/* ===== Sidebar Links ===== */
-
-.sidebar__link {
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid transparent;
-  text-decoration: none; /* ✅ elimina subrayado */
-  font-weight: 500;
-  transition: all 0.15s ease;
-}
-
-/* ===== Shared (neutro) ===== */
-
-.sidebar__link--shared {
-  background: #ffffff;
-  color: #111827;
-  border-color: #e5e7eb;
-}
-
-.sidebar__link--shared:hover {
-  background: #f3f4f6;
-}
-
-/* ===== Admin (verde) ===== */
-
-.sidebar__link--admin {
-  background: #16a34a;
-  color: white;
-  border-color: #16a34a;
-}
-
-.sidebar__link--admin:hover {
-  background: #15803d;
-  border-color: #15803d;
-}
-
-/* ===== Sucursal (azul) ===== */
-
-.sidebar__link--sucursal {
-  background: #2563eb;
-  color: white;
-  border-color: #2563eb;
-}
-
-.sidebar__link--sucursal:hover {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
-}
-
-/* ===== Activo ===== */
-
-.sidebar__link--active {
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.08);
-}
-
-.sidebar__footer {
-  margin-top: auto;
-  padding-top: 18px;
-  border-top: 1px solid var(--border);
-}
-.sidebar__hint {
-  margin-top: 10px;
-  font-size: 12px;
-}
-
-.main {
-  padding: 24px;
-}
-
-/* =========================================
-   RESPONSIVE
-========================================= */
-
-@media (max-width: 900px) {
-  .app-shell {
-    grid-template-columns: 1fr;
+@layer base {
+  * {
+    @apply box-border;
   }
 
-  .sidebar {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
+  html, body {
+    @apply h-full;
+  }
+
+  body {
+    @apply m-0 font-sans bg-neutral-50 text-neutral-900 antialiased;
+  }
+
+  a {
+    @apply no-underline text-inherit;
+  }
+
+  #root {
+    @apply h-full;
+  }
+}
+
+
+/* =========================================
+   CUSTOM COMPONENT STYLES
+========================================= */
+@layer components {
+  /* Scrollbar personalizado */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-neutral-100;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-neutral-300 rounded-full;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-neutral-400;
   }
 }
 
 /* =========================================
-   PAGE
+   UTILITY OVERRIDES
 ========================================= */
-
-.page {
-  display: grid;
-  gap: 20px;
-}
-
-.page--narrow {
-  max-width: 860px;
-}
-
-.page__header {
-  display: grid;
-  gap: 6px;
-}
-
-.page__title {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 600;
-}
-
-.page__subtitle {
-  margin: 0;
-  font-size: 14px;
-  color: var(--muted);
-}
-
-/* =========================================
-   CARD
-========================================= */
-
-.card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-}
-
-.card__header {
-  padding: 16px 16px 0 16px;
-}
-
-.card__title {
-  font-weight: 600;
-}
-
-.card__body {
-  padding: 16px;
-}
-
-.card__footer {
-  padding: 16px;
-  border-top: 1px solid var(--border);
-}
-
-/* =========================================
-   FORMS
-========================================= */
-
-.form {
-  display: grid;
-  gap: 16px;
-}
-
-.field {
-  display: grid;
-  gap: 6px;
-}
-
-.label {
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.input,
-.textarea {
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  font-size: 14px;
-  background: #fff;
-  outline: none;
-}
-
-.input:focus,
-.textarea:focus {
-  border-color: #93c5fd;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-}
-
-.textarea {
-  resize: vertical;
-}
-
-/* =========================================
-   BUTTONS
-========================================= */
-
-.btn {
-  padding: 10px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: #fff;
-  cursor: pointer;
-  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.15s ease;
-}
-
-/* efecto hover suave */
-.btn:hover {
-  transform: scale(1.01); /* 👈 apenas más grande */
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-  background: #f9fafb;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn--primary {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: white;
-}
-
-.btn--primary:hover {
-  background: var(--primary-hover);
-}
-
-.btn--danger {
-  background: white;
-  border-color: #fecaca;
-  color: var(--danger);
-}
-
-.btn--danger:hover {
-  background: #fef2f2;
-}
-
-/* =========================================
-   ALERTS
-========================================= */
-
-.alert {
-  padding: 12px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  font-size: 13px;
-  white-space: pre-wrap;
-}
-
-.alert--error {
-  background: #fef2f2;
-  border-color: #fecaca;
-  color: #7f1d1d;
-}
-
-.alert--ok {
-  background: #f0fdf4;
-  border-color: #bbf7d0;
-  color: #14532d;
-}
-
-/* =========================================
-   LISTS
-========================================= */
-
-.list {
-  margin: 0;
-  padding-left: 18px;
-}
-
-.list__item {
-  margin-bottom: 6px;
-}
-
-.sublist {
-  display: grid;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.sublist__item {
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: #fafafa;
-  font-size: 13px;
-}
-
-/* =========================================
-   CODE BLOCK
-========================================= */
-
-.code {
-  overflow: auto;
-  font-size: 12px;
-  background: #fafafa;
-  border-radius: 10px;
-  padding: 12px;
-}
-
-/* =========================================
-   AUTH PAGE
-========================================= */
-
-.auth {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-}
-
-.auth__card {
-  width: 100%;
-  max-width: 420px;
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
 }

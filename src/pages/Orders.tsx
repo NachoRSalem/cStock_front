@@ -1,10 +1,38 @@
 // src/pages/Orders.tsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createPedido, enviarARevision, listPedidos, type Pedido, type PedidoItemCreate } from "../api/orders";
+import { 
+  createPedido, 
+  enviarARevision, 
+  listPedidos, 
+  aprobarPedido, 
+  rechazarPedido, 
+  recibirPedido,
+  getPedido,
+  type Pedido, 
+  type PedidoItemCreate,
+} from "../api/orders";
 import { listProductos, type Producto } from "../api/products";
-import { listSucursales, type Sucursal } from "../api/locations";
+import { listSucursales, type Sucursal, type SubUbicacion } from "../api/locations";
 import { tokenStorage } from "../utils/storage";
+import { 
+  Card, 
+  CardHeader, 
+  CardTitle, 
+  CardDescription, 
+  CardBody, 
+  CardFooter, 
+  Button, 
+  Badge, 
+  Input, 
+  Modal, 
+  ModalFooter,
+  PageLoader,
+  Alert,
+  ConfirmDialog
+} from "../components/ui";
+import { Plus, Send, Check, X, Package, Trash2, Calendar, MapPin } from "lucide-react";
+import clsx from 'clsx';
 
 type PedidoItemForm = {
   producto: number;
@@ -24,6 +52,19 @@ export default function Orders() {
   const [showCreate, setShowCreate] = useState(false);
   const [destino, setDestino] = useState<number | null>(null);
   const [items, setItems] = useState<PedidoItemForm[]>([]);
+
+  // Estados para el modal de recibir pedido
+  const [showReceiveModal, setShowReceiveModal] = useState(false);
+  const [pedidoToReceive, setPedidoToReceive] = useState<Pedido | null>(null);
+  const [subUbicaciones, setSubUbicaciones] = useState<SubUbicacion[]>([]);
+  const [destinos, setDestinos] = useState<Record<number, number>>({});
+  const [receiveBusy, setReceiveBusy] = useState(false);
+
+  // Estados para ConfirmDialogs
+  const [showEnviarConfirm, setShowEnviarConfirm] = useState(false);
+  const [showAprobarConfirm, setShowAprobarConfirm] = useState(false);
+  const [showRechazarConfirm, setShowRechazarConfirm] = useState(false);
+  const [pedidoAction, setPedidoAction] = useState<number | null>(null);
 
   const session = tokenStorage.getSession();
   const isAdmin = session?.rol === "admin";
@@ -137,23 +178,137 @@ export default function Orders() {
     }
   }
 
-  async function onEnviarARevision(id: number) {
-    if (!confirm("¿Enviar este pedido a revisión del administrador?")) return;
+  function onEnviarARevision(id: number) {
+    setPedidoAction(id);
+    setShowEnviarConfirm(true);
+  }
+
+  async function confirmEnviarARevision() {
+    if (!pedidoAction) return;
     
     setBusy(true);
     setErr(null);
+    setShowEnviarConfirm(false);
     try {
-      await enviarARevision(id);
+      await enviarARevision(pedidoAction);
       await loadData();
     } catch (e: any) {
       setErr(e?.message ?? "Error enviando a revisión");
     } finally {
       setBusy(false);
+      setPedidoAction(null);
     }
   }
 
-  // Orden personalizado: aprobado primero (para recibir), luego el resto
-  const ordenEstados = ["aprobado", "borrador", "pendiente", "recibido", "rechazado"] as const;
+  function onAprobar(id: number) {
+    setPedidoAction(id);
+    setShowAprobarConfirm(true);
+  }
+
+  async function confirmAprobar() {
+    if (!pedidoAction) return;
+    
+    setBusy(true);
+    setErr(null);
+    setShowAprobarConfirm(false);
+    try {
+      await aprobarPedido(pedidoAction);
+      await loadData();
+    } catch (e: any) {
+      setErr(e?.message ?? "Error aprobando pedido");
+    } finally {
+      setBusy(false);
+      setPedidoAction(null);
+    }
+  }
+
+  function onRechazar(id: number) {
+    setPedidoAction(id);
+    setShowRechazarConfirm(true);
+  }
+
+  async function confirmRechazar() {
+    if (!pedidoAction) return;
+    
+    setBusy(true);
+    setErr(null);
+    setShowRechazarConfirm(false);
+    try {
+      await rechazarPedido(pedidoAction);
+      await loadData();
+    } catch (e: any) {
+      setErr(e?.message ?? "Error rechazando pedido");
+    } finally {
+      setBusy(false);
+      setPedidoAction(null);
+    }
+  }
+
+  async function openReceiveModal(pedido: Pedido) {
+    setErr(null);
+    try {
+      // Cargar sub-ubicaciones de la sucursal
+      const sucursalesData = await listSucursales();
+      const miSucursal = sucursalesData.find((s) => s.id === session?.sucursal);
+      if (miSucursal && miSucursal.sub_ubicaciones) {
+        setSubUbicaciones(miSucursal.sub_ubicaciones);
+      }
+
+      // Cargar pedido completo
+      const pedidoCompleto = await getPedido(pedido.id);
+      setPedidoToReceive(pedidoCompleto);
+
+      // Precargar destinos si ya vienen seteados
+      const preset: Record<number, number> = {};
+      for (const it of pedidoCompleto.items ?? []) {
+        if (it.sub_ubicacion_destino != null) preset[it.id] = it.sub_ubicacion_destino;
+      }
+      setDestinos(preset);
+
+      setShowReceiveModal(true);
+    } catch (e: any) {
+      setErr(e?.message ?? "Error cargando datos para recibir pedido");
+    }
+  }
+
+  async function onConfirmarRecepcion() {
+    if (!pedidoToReceive) return;
+
+    setReceiveBusy(true);
+    setErr(null);
+    try {
+      const body = {
+        items: pedidoToReceive.items.map((it) => ({
+          id: it.id,
+          sub_ubicacion_destino: destinos[it.id] ?? it.sub_ubicacion_destino ?? 0,
+        })),
+      };
+
+      // Validación: todos con destino
+      if (body.items.some((x) => !x.sub_ubicacion_destino || x.sub_ubicacion_destino <= 0)) {
+        setErr("Asigná sub-ubicación destino a todos los productos.");
+        setReceiveBusy(false);
+        return;
+      }
+
+      await recibirPedido(pedidoToReceive.id, body);
+      setShowReceiveModal(false);
+      setPedidoToReceive(null);
+      setDestinos({});
+      await loadData();
+    } catch (e: any) {
+      setErr(e?.message ?? "Error confirmando recepción");
+    } finally {
+      setReceiveBusy(false);
+    }
+  }
+
+  // Orden personalizado según el rol
+  // Admin: pendiente primero (para aprobar), luego el resto
+  // Sucursal: aprobado primero (para recibir), luego el resto
+  const ordenEstados = isAdmin 
+    ? (["pendiente", "borrador", "aprobado", "recibido", "rechazado"] as const)
+    : (["aprobado", "borrador", "pendiente", "recibido", "rechazado"] as const);
   
   const pedidosPorEstado = {
     aprobado: pedidos.filter(p => p.estado === "aprobado"),
@@ -163,220 +318,194 @@ export default function Orders() {
     rechazado: pedidos.filter(p => p.estado === "rechazado")
   };
 
-  const estadoLabels = {
-    borrador: "📝 Borrador",
-    pendiente: "⏳ Pendiente",
-    aprobado: "✅ Aprobado",
-    recibido: "📦 Recibido",
-    rechazado: "❌ Rechazado"
+  const estadoLabels: Record<string, string> = {
+    borrador: "Borrador",
+    pendiente: "Pendiente",
+    aprobado: "Aprobado",
+    recibido: "Recibido",
+    rechazado: "Rechazado"
   };
 
-  const estadoColors = {
-    borrador: "#757575",
-    pendiente: "#f57c00",
-    aprobado: "#388e3c",
-    recibido: "#1976d2",
-    rechazado: "#d32f2f"
+  const estadoBadgeVariant: Record<string, "draft" | "pending" | "approved" | "received" | "cancelled"> = {
+    borrador: "draft",
+    pendiente: "pending",
+    aprobado: "approved",
+    recibido: "received",
+    rechazado: "cancelled"
   };
 
   if (loading) {
-    return (
-      <div className="page">
-        <div className="page__header">
-          <h2 className="page__title">Pedidos</h2>
-        </div>
-        <div className="card">
-          <div className="card__body" style={{ textAlign: "center", padding: "3rem" }}>
-            <div className="muted">Cargando pedidos...</div>
-          </div>
-        </div>
-      </div>
-    );
+    return <PageLoader message="Cargando pedidos..." />;
   }
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <h2 className="page__title">Pedidos</h2>
-        <p className="page__subtitle">Gestión de pedidos de mercadería</p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-neutral-900">Pedidos</h1>
+        <p className="text-sm text-neutral-500 mt-1">Gestión de pedidos de mercadería</p>
       </div>
 
-      {err && <div className="alert alert--error">{err}</div>}
+      {/* Alert de errores */}
+      {err && <Alert variant="error">{err}</Alert>}
 
-      {/* Botón crear */}
+      {/* Botón crear nuevo pedido */}
       {!showCreate && (
-        <button className="btn btn--primary" onClick={() => setShowCreate(true)} style={{ marginBottom: "1rem" }}>
-          + Crear nuevo pedido
-        </button>
+        <Button onClick={() => setShowCreate(true)} size="lg">
+          <Plus className="h-5 w-5" />
+          Crear nuevo pedido
+        </Button>
       )}
 
       {/* Formulario crear pedido */}
       {showCreate && (
-        <section className="card" style={{ marginBottom: "2rem" }}>
-          <div className="card__header">
-            <div className="card__title">Nuevo pedido</div>
-            <button className="btn" onClick={() => setShowCreate(false)} disabled={busy}>
-              Cancelar
-            </button>
-          </div>
-          <div className="card__body">
-            <div className="form">
-              <div className="field">
-                <label className="label">Destino</label>
-                {!isAdmin ? (
-                  // Usuario de sucursal: mostrar su sucursal (no editable)
-                  <>
-                    <div style={{ 
-                      padding: "0.75rem", 
-                      backgroundColor: "#f5f5f5", 
-                      border: "1px solid #e0e0e0", 
-                      borderRadius: "4px",
-                      fontWeight: 500
-                    }}>
-                      {(() => {
-                        const sucursal = sucursales.find(s => s.id === destino);
-                        if (sucursal) {
-                          return (
-                            <>
-                              {sucursal.nombre}
-                              <span className="muted" style={{ marginLeft: "0.5rem", fontWeight: "normal" }}>
-                                ({sucursal.tipo})
-                              </span>
-                            </>
-                          );
-                        }
-                        // Si no encuentra la sucursal, mostrar info de debug
-                        return (
-                          <span className="muted">
-                            No se pudo cargar la sucursal (ID: {destino})
-                          </span>
-                        );
-                      })()}
+        <Card>
+          <CardHeader>
+            <CardTitle>Nuevo pedido</CardTitle>
+            <CardDescription>Completá los datos para crear un nuevo pedido de mercadería</CardDescription>
+          </CardHeader>
+          <CardBody className="space-y-6">
+            {/* Destino */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-neutral-700">
+                Destino <span className="text-red-500">*</span>
+              </label>
+              {!isAdmin ? (
+                <div className="flex items-center gap-3 p-4 bg-neutral-50 border border-neutral-200 rounded-lg">
+                  <MapPin className="h-5 w-5 text-primary-600" />
+                  <div>
+                    <div className="font-medium text-neutral-900">
+                      {sucursales.find(s => s.id === destino)?.nombre || "Cargando..."}
                     </div>
-                    {!sucursales.find(s => s.id === destino) && destino && (
-                      <div className="muted" style={{ marginTop: "0.5rem", fontSize: "0.875rem", color: "#f57c00" }}>
-                        ⚠️ Cerrá sesión y volvé a iniciar sesión para que se actualicen tus datos
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  // Admin: puede seleccionar destino
-                  <select 
-                    className="input" 
-                    value={destino ?? ""} 
-                    onChange={(e) => setDestino(Number(e.target.value))}
-                  >
-                    <option value="">Seleccionar...</option>
-                    {sucursales.map(s => (
-                      <option key={s.id} value={s.id}>{s.nombre} ({s.tipo})</option>
-                    ))}
-                  </select>
-                )}
-                {!isAdmin && sucursales.find(s => s.id === destino) && (
-                  <div className="muted" style={{ marginTop: "0.25rem", fontSize: "0.875rem" }}>Tu sucursal asignada</div>
-                )}
-              </div>
-
-              <div className="field">
-                <label className="label">Productos</label>
-                {items.length === 0 ? (
-                  <div className="muted" style={{ marginBottom: "0.5rem" }}>No hay productos agregados</div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "0.5rem" }}>
-                    {items.map((item, index) => {
-                      const producto = productos.find(p => p.id === item.producto);
-                      return (
-                        <div 
-                          key={index} 
-                          style={{ 
-                            display: "flex", 
-                            gap: "0.5rem", 
-                            alignItems: "center", 
-                            padding: "0.75rem", 
-                            border: "1px solid #e0e0e0", 
-                            borderRadius: "4px" 
-                          }}
-                        >
-                          <div style={{ flex: 2 }}>
-                            <select 
-                              className="input" 
-                              value={item.producto || ""} 
-                              onChange={(e) => {
-                                const prodId = Number(e.target.value);
-                                console.log('Producto seleccionado ID:', prodId);
-                                console.log('Estado actual items:', items);
-                                
-                                const prod = productos.find(p => p.id === prodId);
-                                console.log('Producto encontrado:', prod);
-                                
-                                const newItems = [...items];
-                                newItems[index] = {
-                                  ...newItems[index],
-                                  producto: prodId,
-                                  precio_costo_momento: prod ? prod.costo_compra.toString() : newItems[index].precio_costo_momento
-                                };
-                                setItems(newItems);
-                                console.log('Items después de actualizar:', newItems);
-                              }}
-                            >
-                              <option value="">Seleccionar producto...</option>
-                              {productos.map(p => (
-                                <option key={p.id} value={p.id}>
-                                  {p.nombre} - {p.categoria_nombre || "Sin categoría"} - ${p.costo_compra}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          
-                          <input 
-                            type="number" 
-                            className="input" 
-                            placeholder="Cantidad" 
-                            value={item.cantidad}
-                            onChange={(e) => {
-                              console.log('Cantidad cambiada a:', e.target.value);
-                              updateItem(index, "cantidad", Number(e.target.value));
-                            }}
-                            min="1"
-                            style={{ flex: 1 }}
-                          />
-                          
-                          <input 
-                            type="number" 
-                            className="input" 
-                            placeholder="Costo"
-                            value={item.precio_costo_momento}
-                            readOnly
-                            disabled
-                            step="0.01"
-                            min="0"
-                            style={{ flex: 1, backgroundColor: "#f5f5f5" }}
-                          />
-                          
-                          <button 
-                            type="button"
-                            className="btn" 
-                            onClick={() => removeItem(index)} 
-                            style={{ padding: "0.5rem 1rem" }}
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      );
-                    })}
+                    <div className="text-sm text-neutral-500">
+                      {sucursales.find(s => s.id === destino)?.tipo || ""}
+                    </div>
                   </div>
-                )}
-                <button type="button" className="btn" onClick={addItem} disabled={productos.length === 0}>
-                  + Agregar producto
-                </button>
-              </div>
-
-              <button className="btn btn--primary" onClick={onCreate} disabled={busy || !destino || items.length === 0}>
-                {busy ? "Creando..." : "Crear pedido"}
-              </button>
+                </div>
+              ) : (
+                <select 
+                  value={destino?.toString() ?? ""} 
+                  onChange={(e) => setDestino(Number(e.target.value))}
+                  className={clsx(
+                    'w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all',
+                    'bg-white text-neutral-900',
+                    'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent',
+                    !destino
+                      ? 'border-red-300 focus:ring-red-500'
+                      : 'border-neutral-300 hover:border-neutral-400'
+                  )}
+                >
+                  <option value="">Seleccionar sucursal...</option>
+                  {sucursales.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.nombre} ({s.tipo})
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
-          </div>
-        </section>
+
+            {/* Productos */}
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-neutral-700">
+                Productos <span className="text-red-500">*</span>
+              </label>
+              
+              {items.length === 0 ? (
+                <div className="text-center py-8 border-2 border-dashed border-neutral-300 rounded-lg">
+                  <Package className="h-12 w-12 text-neutral-400 mx-auto mb-2" />
+                  <p className="text-sm text-neutral-500">No hay productos agregados</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {items.map((item, index) => {
+                    const producto = productos.find(p => p.id === item.producto);
+                    return (
+                      <div 
+                        key={index} 
+                        className="flex gap-3 p-4 bg-white border border-neutral-200 rounded-lg hover:border-primary-300 transition-colors"
+                      >
+                        <div className="flex-1 space-y-3">
+                          <select
+                            value={item.producto || ""} 
+                            onChange={(e) => {
+                              const prodId = Number(e.target.value);
+                              const prod = productos.find(p => p.id === prodId);
+                              const newItems = [...items];
+                              newItems[index] = {
+                                ...newItems[index],
+                                producto: prodId,
+                                precio_costo_momento: prod ? prod.costo_compra.toString() : newItems[index].precio_costo_momento
+                              };
+                              setItems(newItems);
+                            }}
+                            className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                          >
+                            <option value="">Seleccionar producto...</option>
+                            {productos.map(p => (
+                              <option key={p.id} value={p.id}>
+                                {p.nombre} - {p.categoria_nombre || "Sin categoría"} - ${p.costo_compra}
+                              </option>
+                            ))}
+                          </select>
+                          
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs text-neutral-500 mb-1">Cantidad</label>
+                              <Input
+                                type="number" 
+                                placeholder="Cantidad" 
+                                value={item.cantidad}
+                                onChange={(e) => updateItem(index, "cantidad", Number(e.target.value))}
+                                min="1"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-neutral-500 mb-1">Costo unitario</label>
+                              <Input
+                                type="number" 
+                                value={item.precio_costo_momento}
+                                readOnly
+                                disabled
+                                className="bg-neutral-50"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => removeItem(index)}
+                          className="self-start"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              
+              <Button 
+                variant="outline" 
+                onClick={addItem} 
+                disabled={productos.length === 0}
+                className="w-full"
+              >
+                <Plus className="h-4 w-4" />
+                Agregar producto
+              </Button>
+            </div>
+          </CardBody>
+          <CardFooter className="flex gap-3 justify-end">
+            <Button variant="ghost" onClick={() => setShowCreate(false)} disabled={busy}>
+              Cancelar
+            </Button>
+            <Button onClick={onCreate} disabled={busy || !destino || items.length === 0} loading={busy}>
+              Crear pedido
+            </Button>
+          </CardFooter>
+        </Card>
       )}
 
       {/* Listado por estados - orden personalizado */}
@@ -385,90 +514,305 @@ export default function Orders() {
         if (pedidosEstado.length === 0) return null;
         
         return (
-          <section key={estado} className="card" style={{ marginBottom: "1.5rem" }}>
-            <div className="card__header">
-              <div className="card__title" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <div key={estado} className="space-y-3">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold text-neutral-900">
                 {estadoLabels[estado as keyof typeof estadoLabels]}
-                <span className="badge" style={{ backgroundColor: estadoColors[estado as keyof typeof estadoColors], color: "white" }}>
-                  {pedidosEstado.length}
-                </span>
-              </div>
+              </h2>
+              <Badge variant={estadoBadgeVariant[estado as keyof typeof estadoBadgeVariant]} dot>
+                {pedidosEstado.length}
+              </Badge>
             </div>
-            <div className="card__body" style={{ padding: 0 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
-                {pedidosEstado.map((pedido, idx) => (
-                  <div 
-                    key={pedido.id} 
-                    style={{ 
-                      padding: "1rem", 
-                      borderBottom: idx < pedidosEstado.length - 1 ? "1px solid #f0f0f0" : undefined 
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.75rem" }}>
+            
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {pedidosEstado.map((pedido) => (
+                <Card key={pedido.id} className="hover:shadow-soft-lg transition-shadow">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
                       <div>
-                        <div style={{ fontWeight: "bold", marginBottom: "0.25rem" }}>
-                          Pedido #{pedido.id} - {pedido.destino_nombre}
-                        </div>
-                        <div className="muted" style={{ fontSize: "0.875rem" }}>
-                          {new Date(pedido.fecha_creacion).toLocaleString("es-AR")}
-                        </div>
+                        <CardTitle className="text-base">Pedido #{pedido.id}</CardTitle>
+                        <CardDescription className="flex items-center gap-1 mt-1">
+                          <MapPin className="h-3 w-3" />
+                          {pedido.destino_nombre}
+                        </CardDescription>
                       </div>
-                      {pedido.estado === "borrador" && (
-                        <button 
-                          className="btn btn--primary" 
-                          onClick={() => onEnviarARevision(pedido.id)}
-                          disabled={busy}
-                          style={{ fontSize: "0.875rem", padding: "0.5rem 1rem" }}
-                        >
-                          Enviar a revisión
-                        </button>
-                      )}
-                      {pedido.estado === "aprobado" && !isAdmin && (
-                        <button 
-                          className="btn btn--primary" 
-                          onClick={() => navigate(`/sucursal/receive?pedido=${pedido.id}`)}
-                          disabled={busy}
-                          style={{ fontSize: "0.875rem", padding: "0.5rem 1rem", backgroundColor: "#388e3c" }}
-                        >
-                          📦 Recibir pedido
-                        </button>
-                      )}
+                      <Badge variant={estadoBadgeVariant[pedido.estado as keyof typeof estadoBadgeVariant]}>
+                        {estadoLabels[pedido.estado as keyof typeof estadoLabels]}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  
+                  <CardBody className="space-y-3">
+                    <div className="flex items-center gap-2 text-xs text-neutral-500">
+                      <Calendar className="h-3 w-3" />
+                      {new Date(pedido.fecha_creacion).toLocaleDateString("es-AR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit"
+                      })}
                     </div>
                     
-                    <div style={{ backgroundColor: "#f9f9f9", padding: "0.75rem", borderRadius: "4px" }}>
-                      <div style={{ fontWeight: 500, marginBottom: "0.5rem", fontSize: "0.875rem" }}>Productos:</div>
-                      {pedido.items.map(item => (
-                        <div key={item.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", marginBottom: "0.25rem" }}>
-                          <span>{item.producto_nombre}</span>
-                          <span>
-                            <span style={{ fontWeight: "bold" }}>{item.cantidad}</span> unidades × ${item.precio_costo_momento}
-                          </span>
-                        </div>
-                      ))}
-                      <div style={{ borderTop: "1px solid #e0e0e0", marginTop: "0.5rem", paddingTop: "0.5rem", display: "flex", justifyContent: "space-between", fontWeight: "bold" }}>
+                    <div className="space-y-2">
+                      <div className="text-xs font-medium text-neutral-700">Productos:</div>
+                      <div className="space-y-1.5">
+                        {pedido.items.slice(0, 2).map(item => (
+                          <div key={item.id} className="flex justify-between text-xs text-neutral-600 bg-neutral-50 px-2 py-1.5 rounded">
+                            <span className="truncate">{item.producto_nombre}</span>
+                            <span className="font-medium whitespace-nowrap ml-2">
+                              {item.cantidad} × ${item.precio_costo_momento}
+                            </span>
+                          </div>
+                        ))}
+                        {pedido.items.length > 2 && (
+                          <div className="text-xs text-neutral-400 px-2">
+                            +{pedido.items.length - 2} más...
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="pt-2 border-t border-neutral-100 flex justify-between text-sm font-semibold">
                         <span>Total:</span>
-                        <span>
+                        <span className="text-primary-700">
                           ${pedido.items.reduce((sum, item) => 
                             sum + (item.cantidad * parseFloat(item.precio_costo_momento)), 0
                           ).toFixed(2)}
                         </span>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  </CardBody>
+                  
+                  {(pedido.estado === "borrador" || 
+                    (pedido.estado === "pendiente" && isAdmin) || 
+                    (pedido.estado === "aprobado" && !isAdmin)) && (
+                    <CardFooter className="flex gap-2">
+                      {pedido.estado === "borrador" && (
+                        <Button 
+                          onClick={() => onEnviarARevision(pedido.id)}
+                          disabled={busy}
+                          className="w-full"
+                          size="sm"
+                        >
+                          <Send className="h-4 w-4" />
+                          Enviar a revisión
+                        </Button>
+                      )}
+                      {pedido.estado === "pendiente" && isAdmin && (
+                        <>
+                          <Button 
+                            onClick={() => onAprobar(pedido.id)}
+                            disabled={busy}
+                            className="flex-1"
+                            size="sm"
+                            variant="success"
+                          >
+                            <Check className="h-4 w-4" />
+                            Aprobar
+                          </Button>
+                          <Button 
+                            onClick={() => onRechazar(pedido.id)}
+                            disabled={busy}
+                            className="flex-1"
+                            size="sm"
+                            variant="danger"
+                          >
+                            <X className="h-4 w-4" />
+                            Rechazar
+                          </Button>
+                        </>
+                      )}
+                      {pedido.estado === "aprobado" && !isAdmin && (
+                        <Button 
+                          onClick={() => openReceiveModal(pedido)}
+                          disabled={busy}
+                          className="w-full"
+                          size="sm"
+                          variant="success"
+                        >
+                          <Package className="h-4 w-4" />
+                          Recibir pedido
+                        </Button>
+                      )}
+                    </CardFooter>
+                  )}
+                </Card>
+              ))}
             </div>
-          </section>
+          </div>
         );
       })}
 
       {pedidos.length === 0 && !showCreate && (
-        <div className="card">
-          <div className="card__body" style={{ textAlign: "center", padding: "3rem" }}>
-            <div className="muted">No hay pedidos registrados</div>
-          </div>
-        </div>
+        <Card>
+          <CardBody className="text-center py-12">
+            <Package className="h-16 w-16 text-neutral-300 mx-auto mb-4" />
+            <p className="text-neutral-500">No hay pedidos registrados</p>
+          </CardBody>
+        </Card>
       )}
+
+      {/* Modal para recibir pedido */}
+      <Modal 
+        open={showReceiveModal} 
+        onClose={() => {
+          setShowReceiveModal(false);
+          setPedidoToReceive(null);
+          setDestinos({});
+        }}
+        title="Recibir pedido"
+        description="Asigná sub-ubicación destino a cada producto del pedido"
+        size="lg"
+      >
+        {pedidoToReceive && (
+          <div className="space-y-4">
+            {/* Info del pedido */}
+            <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-neutral-900">
+                    Pedido #{pedidoToReceive.id}
+                  </div>
+                  <div className="text-sm text-neutral-600 flex items-center gap-2 mt-1">
+                    <MapPin className="h-3 w-3" />
+                    {pedidoToReceive.destino_nombre}
+                  </div>
+                </div>
+                <Badge variant="approved">
+                  {pedidoToReceive.items.length} {pedidoToReceive.items.length === 1 ? 'producto' : 'productos'}
+                </Badge>
+              </div>
+            </div>
+
+            {/* Items del pedido */}
+            <div className="space-y-3">
+              {pedidoToReceive.items.map((item) => (
+                <div 
+                  key={item.id}
+                  className="border border-neutral-200 rounded-lg p-4 space-y-3 hover:border-primary-300 transition-colors"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="font-medium text-neutral-900">
+                        {item.producto_nombre}
+                      </div>
+                      <div className="text-sm text-neutral-500 mt-1">
+                        Cantidad: <span className="font-medium">{item.cantidad}</span> · 
+                        Costo: <span className="font-medium">${item.precio_costo_momento}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 mb-2">
+                      Sub-ubicación destino <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={destinos[item.id] ?? item.sub_ubicacion_destino ?? ""}
+                      onChange={(e) =>
+                        setDestinos((prev) => ({ ...prev, [item.id]: Number(e.target.value) }))
+                      }
+                      className={clsx(
+                        'w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all',
+                        'bg-white text-neutral-900',
+                        'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent',
+                        !destinos[item.id] && !item.sub_ubicacion_destino
+                          ? 'border-red-300 focus:ring-red-500'
+                          : 'border-neutral-300 hover:border-neutral-400'
+                      )}
+                    >
+                      <option value="">Seleccionar sub-ubicación...</option>
+                      {subUbicaciones.map((sub) => (
+                        <option key={sub.id} value={sub.id}>
+                          {sub.nombre} ({sub.tipo})
+                        </option>
+                      ))}
+                    </select>
+                    {!destinos[item.id] && !item.sub_ubicacion_destino && (
+                      <p className="mt-1.5 text-xs text-red-600">Este campo es requerido</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {pedidoToReceive.items.some((it) => !destinos[it.id] && it.sub_ubicacion_destino == null) && (
+              <Alert variant="warning">
+                Completá la sub-ubicación destino en todos los productos antes de confirmar.
+              </Alert>
+            )}
+          </div>
+        )}
+
+        <ModalFooter>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setShowReceiveModal(false);
+              setPedidoToReceive(null);
+              setDestinos({});
+            }}
+            disabled={receiveBusy}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={onConfirmarRecepcion}
+            disabled={
+              receiveBusy || 
+              (pedidoToReceive?.items.some((it) => !destinos[it.id] && it.sub_ubicacion_destino == null) ?? false)
+            }
+            loading={receiveBusy}
+            variant="success"
+          >
+            <Check className="h-4 w-4" />
+            Confirmar recepción
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Confirm Dialogs */}
+      <ConfirmDialog
+        open={showEnviarConfirm}
+        onClose={() => {
+          setShowEnviarConfirm(false);
+          setPedidoAction(null);
+        }}
+        onConfirm={confirmEnviarARevision}
+        title="Enviar a revisión"
+        message="¿Enviar este pedido a revisión del administrador?"
+        confirmText="Enviar"
+        variant="info"
+        loading={busy}
+      />
+
+      <ConfirmDialog
+        open={showAprobarConfirm}
+        onClose={() => {
+          setShowAprobarConfirm(false);
+          setPedidoAction(null);
+        }}
+        onConfirm={confirmAprobar}
+        title="Aprobar pedido"
+        message="¿Confirmar la aprobación de este pedido?"
+        confirmText="Aprobar"
+        variant="success"
+        loading={busy}
+      />
+
+      <ConfirmDialog
+        open={showRechazarConfirm}
+        onClose={() => {
+          setShowRechazarConfirm(false);
+          setPedidoAction(null);
+        }}
+        onConfirm={confirmRechazar}
+        title="Rechazar pedido"
+        message="¿Rechazar este pedido? Esta acción no se puede deshacer."
+        confirmText="Rechazar"
+        variant="danger"
+        loading={busy}
+      />
     </div>
   );
 }

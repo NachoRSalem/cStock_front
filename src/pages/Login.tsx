@@ -1,8 +1,9 @@
-// src/pages/Login.tsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../api/auth";
 import { tokenStorage } from "../utils/storage";
+import { Button, Input, Alert } from "../components/ui";
+import { LogIn, Package } from "lucide-react";
 
 export default function Login() {
   const nav = useNavigate();
@@ -27,42 +28,66 @@ export default function Login() {
   }
 
   return (
-    <div className="auth">
-      <div className="auth__card card">
-        <div className="card__header">
-          <h2 className="page__title">Ingresar</h2>
-          <p className="page__subtitle">Accedé con tu usuario y contraseña.</p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-emerald-50 p-4">
+      <div className="w-full max-w-md">
+        {/* Header */}
+        <div className="text-center mb-8 animate-fade-in">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-emerald-500 text-white mb-4 shadow-lg">
+            <Package className="h-8 w-8" />
+          </div>
+          <h1 className="text-3xl font-bold text-neutral-900 mb-2">Gestión de Stock</h1>
+          <p className="text-neutral-600">Sistema de logística y pedidos</p>
         </div>
 
-        <div className="card__body">
-          <form onSubmit={onSubmit} className="form">
-            <div className="field">
-              <label className="label">Usuario</label>
-              <input
-                className="input"
-                placeholder="Usuario"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-            </div>
+        {/* Login Card */}
+        <div className="bg-white rounded-2xl shadow-soft-xl border border-neutral-100 p-8 animate-slide-up">
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold text-neutral-900 mb-1">Iniciar Sesión</h2>
+            <p className="text-sm text-neutral-500">Ingresá con tu usuario y contraseña</p>
+          </div>
 
-            <div className="field">
-              <label className="label">Contraseña</label>
-              <input
-                className="input"
-                placeholder="Contraseña"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
+          <form onSubmit={onSubmit} className="space-y-5">
+            <Input
+              label="Usuario"
+              placeholder="Ingresá tu usuario"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              autoFocus
+            />
 
-            <button className="btn btn--primary" disabled={loading} type="submit">
-              {loading ? "Entrando..." : "Entrar"}
-            </button>
+            <Input
+              label="Contraseña"
+              placeholder="Ingresá tu contraseña"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
 
-            {err && <pre className="alert alert--error">{err}</pre>}
+            {err && (
+              <Alert variant="error" className="animate-fade-in">
+                {err}
+              </Alert>
+            )}
+
+            <Button
+              type="submit"
+              loading={loading}
+              disabled={!username || !password}
+              className="w-full"
+              size="lg"
+            >
+              <LogIn className="h-5 w-5" />
+              {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
+            </Button>
           </form>
+
+          <div className="mt-6 pt-6 border-t border-neutral-100">
+            <p className="text-center text-xs text-neutral-500">
+              Sistema de gestión de stock © 2026
+            </p>
+          </div>
         </div>
       </div>
     </div>

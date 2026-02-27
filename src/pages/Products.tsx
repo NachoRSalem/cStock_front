@@ -14,6 +14,30 @@ import {
   type ProductoCreateUpdate,
   type CategoriaCreateUpdate
 } from "../api/products";
+import { 
+  Card, 
+  CardHeader, 
+  CardTitle, 
+  CardDescription, 
+  CardBody, 
+  CardFooter, 
+  Button, 
+  Badge, 
+  Input, 
+  Modal, 
+  ModalFooter,
+  PageLoader,
+  Alert,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  ConfirmDialog
+} from "../components/ui";
+import { Plus, Edit2, Trash2, Package, Tag, Thermometer, Refrigerator, Snowflake, Search, DollarSign, Filter } from "lucide-react";
+import clsx from 'clsx';
 
 type TabType = "productos" | "categorias";
 
@@ -46,6 +70,12 @@ export default function Products() {
   const [showCatForm, setShowCatForm] = useState(false);
   const [editingCat, setEditingCat] = useState<Categoria | null>(null);
   const [catForm, setCatForm] = useState<CategoriaCreateUpdate>({ nombre: "" });
+
+  // Estados para ConfirmDialogs
+  const [showDeleteProductConfirm, setShowDeleteProductConfirm] = useState(false);
+  const [showDeleteCatConfirm, setShowDeleteCatConfirm] = useState(false);
+  const [deleteProductData, setDeleteProductData] = useState<{ id: number; nombre: string } | null>(null);
+  const [deleteCatData, setDeleteCatData] = useState<{ id: number; nombre: string } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -128,18 +158,25 @@ export default function Products() {
     }
   }
 
-  async function handleDeleteProduct(id: number, nombre: string) {
-    if (!confirm(`¿Eliminar el producto "${nombre}"? Esta acción no se puede deshacer.`)) return;
+  function handleDeleteProduct(id: number, nombre: string) {
+    setDeleteProductData({ id, nombre });
+    setShowDeleteProductConfirm(true);
+  }
+
+  async function confirmDeleteProduct() {
+    if (!deleteProductData) return;
     
     setBusy(true);
     setErr(null);
+    setShowDeleteProductConfirm(false);
     try {
-      await deleteProducto(id);
+      await deleteProducto(deleteProductData.id);
       await loadData();
     } catch (e: any) {
       setErr(e?.message ?? "Error eliminando producto");
     } finally {
       setBusy(false);
+      setDeleteProductData(null);
     }
   }
 
@@ -182,370 +219,469 @@ export default function Products() {
     }
   }
 
-  async function handleDeleteCat(id: number, nombre: string) {
-    if (!confirm(`¿Eliminar la categoría "${nombre}"? Esta acción no se puede deshacer.`)) return;
+  function handleDeleteCat(id: number, nombre: string) {
+    setDeleteCatData({ id, nombre });
+    setShowDeleteCatConfirm(true);
+  }
+
+  async function confirmDeleteCat() {
+    if (!deleteCatData) return;
     
     setBusy(true);
     setErr(null);
+    setShowDeleteCatConfirm(false);
     try {
-      await deleteCategoria(id);
+      await deleteCategoria(deleteCatData.id);
       await loadData();
     } catch (e: any) {
       setErr(e?.message ?? "Error eliminando categoría. Puede que tenga productos asociados.");
     } finally {
       setBusy(false);
+      setDeleteCatData(null);
     }
   }
 
+  const getTipoIcon = (tipo: string) => {
+    switch (tipo) {
+      case "ambiente":
+        return <Thermometer className="h-4 w-4" />;
+      case "heladera":
+        return <Refrigerator className="h-4 w-4" />;
+      case "freezer":
+        return <Snowflake className="h-4 w-4" />;
+      default:
+        return <Package className="h-4 w-4" />;
+    }
+  };
+
+  const getTipoBadgeVariant = (tipo: string): "default" | "draft" | "pending" | "approved" => {
+    switch (tipo) {
+      case "ambiente":
+        return "approved";
+      case "heladera":
+        return "pending";
+      case "freezer":
+        return "draft";
+      default:
+        return "default";
+    }
+  };
+
   if (loading) {
-    return (
-      <div className="page">
-        <div className="page__header">
-          <h2 className="page__title">Productos</h2>
-        </div>
-        <div className="card">
-          <div className="card__body" style={{ textAlign: "center", padding: "3rem" }}>
-            <div className="muted">Cargando...</div>
-          </div>
-        </div>
-      </div>
-    );
+    return <PageLoader message="Cargando productos..." />;
   }
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <h2 className="page__title">Gestión de Productos</h2>
-        <p className="page__subtitle">Administración de productos y categorías</p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-neutral-900">Gestión de Productos</h1>
+        <p className="text-sm text-neutral-500 mt-1">Administración de productos y categorías</p>
       </div>
 
-      {err && <div className="alert alert--error">{err}</div>}
+      {/* Alert de errores */}
+      {err && <Alert variant="error">{err}</Alert>}
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", borderBottom: "2px solid #e0e0e0" }}>
+      <div className="flex gap-2 border-b border-neutral-200">
         <button
           onClick={() => setTab("productos")}
-          style={{
-            padding: "0.75rem 1.5rem",
-            border: "none",
-            background: "none",
-            borderBottom: tab === "productos" ? "3px solid #1976d2" : "3px solid transparent",
-            fontWeight: tab === "productos" ? "bold" : "normal",
-            color: tab === "productos" ? "#1976d2" : "#666",
-            cursor: "pointer"
-          }}
+          className={clsx(
+            "flex items-center gap-2 px-4 py-3 font-medium text-sm border-b-2 transition-colors",
+            tab === "productos"
+              ? "border-primary-500 text-primary-600"
+              : "border-transparent text-neutral-600 hover:text-neutral-900 hover:border-neutral-300"
+          )}
         >
-          📦 Productos ({productos.length})
+          <Package className="h-4 w-4" />
+          Productos
+          <Badge variant="default">{productos.length}</Badge>
         </button>
         <button
           onClick={() => setTab("categorias")}
-          style={{
-            padding: "0.75rem 1.5rem",
-            border: "none",
-            background: "none",
-            borderBottom: tab === "categorias" ? "3px solid #1976d2" : "3px solid transparent",
-            fontWeight: tab === "categorias" ? "bold" : "normal",
-            color: tab === "categorias" ? "#1976d2" : "#666",
-            cursor: "pointer"
-          }}
+          className={clsx(
+            "flex items-center gap-2 px-4 py-3 font-medium text-sm border-b-2 transition-colors",
+            tab === "categorias"
+              ? "border-primary-500 text-primary-600"
+              : "border-transparent text-neutral-600 hover:text-neutral-900 hover:border-neutral-300"
+          )}
         >
-          🏷️ Categorías ({categorias.length})
+          <Tag className="h-4 w-4" />
+          Categorías
+          <Badge variant="default">{categorias.length}</Badge>
         </button>
       </div>
 
       {/* TAB: PRODUCTOS */}
       {tab === "productos" && (
-        <>
+        <div className="space-y-6">
           {!showProductForm && (
-            <button className="btn btn--primary" onClick={() => openProductForm()} style={{ marginBottom: "1rem" }}>
-              + Crear nuevo producto
-            </button>
+            <Button onClick={() => openProductForm()} size="lg">
+              <Plus className="h-5 w-5" />
+              Crear nuevo producto
+            </Button>
           )}
 
-          {/* Formulario crear/editar producto */}
-          {showProductForm && (
-            <section className="card" style={{ marginBottom: "2rem" }}>
-              <div className="card__header">
-                <div className="card__title">{editingProduct ? "Editar producto" : "Nuevo producto"}</div>
-                <button className="btn" onClick={closeProductForm} disabled={busy}>Cancelar</button>
-              </div>
-              <div className="card__body">
-                <div className="form" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-                  <div className="field">
-                    <label className="label">Nombre *</label>
-                    <input
-                      className="input"
-                      value={productForm.nombre}
-                      onChange={(e) => setProductForm({ ...productForm, nombre: e.target.value })}
-                      placeholder="Ej: Coca Cola 500ml"
-                    />
-                  </div>
-                  
-                  <div className="field">
-                    <label className="label">Categoría *</label>
-                    <select
-                      className="input"
-                      value={productForm.categoria}
-                      onChange={(e) => setProductForm({ ...productForm, categoria: Number(e.target.value) })}
-                    >
-                      <option value="">Seleccionar...</option>
-                      {categorias.map(cat => (
-                        <option key={cat.id} value={cat.id}>{cat.nombre}</option>
-                      ))}
-                    </select>
-                  </div>
+          {/* Modal Formulario crear/editar producto */}
+          <Modal
+            open={showProductForm}
+            onClose={closeProductForm}
+            title={editingProduct ? "Editar producto" : "Nuevo producto"}
+            description="Completá los datos del producto"
+            size="lg"
+          >
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Nombre"
+                  required
+                  value={productForm.nombre}
+                  onChange={(e) => setProductForm({ ...productForm, nombre: e.target.value })}
+                  placeholder="Ej: Coca Cola 500ml"
+                />
 
-                  <div className="field">
-                    <label className="label">Tipo de conservación *</label>
-                    <select
-                      className="input"
-                      value={productForm.tipo_conservacion}
-                      onChange={(e) => setProductForm({ ...productForm, tipo_conservacion: e.target.value as any })}
-                    >
-                      <option value="ambiente">🌡️ Temperatura Ambiente</option>
-                      <option value="heladera">❄️ Heladera</option>
-                      <option value="freezer">🧊 Freezer</option>
-                    </select>
-                  </div>
-
-                  <div className="field">
-                    <label className="label">SKU / Código de barras</label>
-                    <input
-                      className="input"
-                      value={productForm.sku || ""}
-                      onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })}
-                      placeholder="Opcional"
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label className="label">Precio de venta *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="input"
-                      value={productForm.precio_venta}
-                      onChange={(e) => setProductForm({ ...productForm, precio_venta: e.target.value })}
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label className="label">Costo de compra *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="input"
-                      value={productForm.costo_compra}
-                      onChange={(e) => setProductForm({ ...productForm, costo_compra: e.target.value })}
-                      placeholder="0.00"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    Categoría <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={productForm.categoria}
+                    onChange={(e) => setProductForm({ ...productForm, categoria: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                  >
+                    <option value="">Seleccionar...</option>
+                    {categorias.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+                    ))}
+                  </select>
                 </div>
 
-                <button className="btn btn--primary" onClick={handleSaveProduct} disabled={busy} style={{ marginTop: "1rem" }}>
-                  {busy ? "Guardando..." : editingProduct ? "Guardar cambios" : "Crear producto"}
-                </button>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    Tipo de conservación <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={productForm.tipo_conservacion}
+                    onChange={(e) => setProductForm({ ...productForm, tipo_conservacion: e.target.value as any })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                  >
+                    <option value="ambiente">🌡️ Temperatura Ambiente</option>
+                    <option value="heladera">❄️ Heladera</option>
+                    <option value="freezer">🧊 Freezer</option>
+                  </select>
+                </div>
+
+                <Input
+                  label="SKU / Código de barras"
+                  value={productForm.sku || ""}
+                  onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })}
+                  placeholder="Opcional"
+                />
+
+                <Input
+                  label="Precio de venta"
+                  type="number"
+                  step="0.01"
+                  required
+                  value={productForm.precio_venta}
+                  onChange={(e) => setProductForm({ ...productForm, precio_venta: e.target.value })}
+                  placeholder="0.00"
+                />
+
+                <Input
+                  label="Costo de compra"
+                  type="number"
+                  step="0.01"
+                  required
+                  value={productForm.costo_compra}
+                  onChange={(e) => setProductForm({ ...productForm, costo_compra: e.target.value })}
+                  placeholder="0.00"
+                />
               </div>
-            </section>
-          )}
+            </div>
+
+            <ModalFooter>
+              <Button variant="ghost" onClick={closeProductForm} disabled={busy}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveProduct} loading={busy}>
+                {editingProduct ? "Guardar cambios" : "Crear producto"}
+              </Button>
+            </ModalFooter>
+          </Modal>
 
           {/* Filtros */}
-          <section className="card" style={{ marginBottom: "1rem" }}>
-            <div className="card__body">
-              <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-                <div className="field" style={{ flex: 1, minWidth: "200px", marginBottom: 0 }}>
-                  <label className="label">Buscar</label>
-                  <input
-                    className="input"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Buscar por nombre..."
-                    onKeyDown={(e) => e.key === "Enter" && loadData()}
-                  />
-                </div>
-                <div className="field" style={{ flex: 1, minWidth: "200px", marginBottom: 0 }}>
-                  <label className="label">Categoría</label>
-                  <select className="input" value={filterCategoria} onChange={(e) => setFilterCategoria(e.target.value)}>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Filter className="h-5 w-5 text-primary-600" />
+                <CardTitle className="text-base">Filtros</CardTitle>
+              </div>
+            </CardHeader>
+            <CardBody>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Input
+                  label="Buscar"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Buscar por nombre..."
+                  onKeyDown={(e) => e.key === "Enter" && loadData()}
+                />
+
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    Categoría
+                  </label>
+                  <select
+                    value={filterCategoria}
+                    onChange={(e) => setFilterCategoria(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                  >
                     <option value="all">Todas</option>
                     {categorias.map(cat => (
                       <option key={cat.id} value={cat.id}>{cat.nombre}</option>
                     ))}
                   </select>
                 </div>
-                <div className="field" style={{ flex: 1, minWidth: "200px", marginBottom: 0 }}>
-                  <label className="label">Tipo</label>
-                  <select className="input" value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)}>
+
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    Tipo
+                  </label>
+                  <select
+                    value={filterTipo}
+                    onChange={(e) => setFilterTipo(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                  >
                     <option value="all">Todos</option>
                     <option value="ambiente">Ambiente</option>
                     <option value="heladera">Heladera</option>
                     <option value="freezer">Freezer</option>
                   </select>
                 </div>
-                <div style={{ display: "flex", alignItems: "flex-end" }}>
-                  <button className="btn" onClick={loadData}>Buscar</button>
+
+                <div className="flex items-end">
+                  <Button onClick={loadData} className="w-full">
+                    <Search className="h-4 w-4" />
+                    Buscar
+                  </Button>
                 </div>
               </div>
-            </div>
-          </section>
+            </CardBody>
+          </Card>
 
           {/* Lista de productos */}
-          <section className="card">
-            <div className="card__header">
-              <div className="card__title">Productos</div>
-              <div className="muted">{filteredProducts.length} productos</div>
-            </div>
-            <div className="card__body" style={{ padding: 0 }}>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Productos</CardTitle>
+                  <CardDescription>{filteredProducts.length} productos</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardBody className="p-0">
               {filteredProducts.length === 0 ? (
-                <div style={{ padding: "3rem", textAlign: "center" }}>
-                  <div className="muted">No hay productos</div>
+                <div className="text-center py-12">
+                  <Package className="h-16 w-16 text-neutral-300 mx-auto mb-4" />
+                  <p className="text-neutral-500">No hay productos</p>
                 </div>
               ) : (
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ borderBottom: "1px solid #e0e0e0", backgroundColor: "#f5f5f5" }}>
-                        <th style={{ padding: "0.75rem", textAlign: "left" }}>Nombre</th>
-                        <th style={{ padding: "0.75rem", textAlign: "left" }}>Categoría</th>
-                        <th style={{ padding: "0.75rem", textAlign: "center" }}>Tipo</th>
-                        <th style={{ padding: "0.75rem", textAlign: "right" }}>Precio Venta</th>
-                        <th style={{ padding: "0.75rem", textAlign: "right" }}>Costo</th>
-                        <th style={{ padding: "0.75rem", textAlign: "center" }}>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nombre</TableHead>
+                        <TableHead>Categoría</TableHead>
+                        <TableHead className="text-center">Tipo</TableHead>
+                        <TableHead className="text-right">Precio Venta</TableHead>
+                        <TableHead className="text-right">Costo</TableHead>
+                        <TableHead className="text-center">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {filteredProducts.map((prod) => (
-                        <tr key={prod.id} style={{ borderBottom: "1px solid #f0f0f0" }}>
-                          <td style={{ padding: "0.75rem" }}>
-                            <div style={{ fontWeight: 500 }}>{prod.nombre}</div>
-                            {prod.sku && <div className="muted" style={{ fontSize: "0.75rem" }}>SKU: {prod.sku}</div>}
-                          </td>
-                          <td style={{ padding: "0.75rem" }}>{prod.categoria_nombre}</td>
-                          <td style={{ padding: "0.75rem", textAlign: "center" }}>
-                            <span className="badge">
-                              {prod.tipo_conservacion === "ambiente" && "🌡️"}
-                              {prod.tipo_conservacion === "heladera" && "❄️"}
-                              {prod.tipo_conservacion === "freezer" && "🧊"}
-                            </span>
-                          </td>
-                          <td style={{ padding: "0.75rem", textAlign: "right", fontWeight: "bold" }}>
-                            ${parseFloat(prod.precio_venta).toFixed(2)}
-                          </td>
-                          <td style={{ padding: "0.75rem", textAlign: "right" }}>
+                        <TableRow key={prod.id}>
+                          <TableCell>
+                            <div className="font-medium text-neutral-900">{prod.nombre}</div>
+                            {prod.sku && (
+                              <div className="text-xs text-neutral-500 mt-0.5">SKU: {prod.sku}</div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="default">{prod.categoria_nombre}</Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant={getTipoBadgeVariant(prod.tipo_conservacion)}>
+                              <div className="flex items-center gap-1.5">
+                                {getTipoIcon(prod.tipo_conservacion)}
+                              </div>
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1 font-semibold text-emerald-600">
+                              <DollarSign className="h-3 w-3" />
+                              {parseFloat(prod.precio_venta).toFixed(2)}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right text-neutral-600">
                             ${parseFloat(prod.costo_compra).toFixed(2)}
-                          </td>
-                          <td style={{ padding: "0.75rem", textAlign: "center" }}>
-                            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center" }}>
-                              <button
-                                className="btn"
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center justify-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
                                 onClick={() => openProductForm(prod)}
                                 disabled={busy}
-                                style={{ fontSize: "0.875rem", padding: "0.25rem 0.75rem" }}
                               >
-                                ✏️ Editar
-                              </button>
-                              <button
-                                className="btn"
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
                                 onClick={() => handleDeleteProduct(prod.id, prod.nombre)}
                                 disabled={busy}
-                                style={{ fontSize: "0.875rem", padding: "0.25rem 0.75rem", color: "#d32f2f" }}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
                               >
-                                🗑️
-                              </button>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               )}
-            </div>
-          </section>
-        </>
+            </CardBody>
+          </Card>
+        </div>
       )}
 
       {/* TAB: CATEGORÍAS */}
       {tab === "categorias" && (
-        <>
+        <div className="space-y-6">
           {!showCatForm && (
-            <button className="btn btn--primary" onClick={() => openCatForm()} style={{ marginBottom: "1rem" }}>
-              + Crear nueva categoría
-            </button>
+            <Button onClick={() => openCatForm()} size="lg">
+              <Plus className="h-5 w-5" />
+              Crear nueva categoría
+            </Button>
           )}
 
-          {/* Formulario crear/editar categoría */}
-          {showCatForm && (
-            <section className="card" style={{ marginBottom: "2rem" }}>
-              <div className="card__header">
-                <div className="card__title">{editingCat ? "Editar categoría" : "Nueva categoría"}</div>
-                <button className="btn" onClick={closeCatForm} disabled={busy}>Cancelar</button>
-              </div>
-              <div className="card__body">
-                <div className="form">
-                  <div className="field">
-                    <label className="label">Nombre *</label>
-                    <input
-                      className="input"
-                      value={catForm.nombre}
-                      onChange={(e) => setCatForm({ nombre: e.target.value })}
-                      placeholder="Ej: Bebidas, Golosinas, Snacks..."
-                    />
-                  </div>
-                  <button className="btn btn--primary" onClick={handleSaveCat} disabled={busy}>
-                    {busy ? "Guardando..." : editingCat ? "Guardar cambios" : "Crear categoría"}
-                  </button>
-                </div>
-              </div>
-            </section>
-          )}
+          {/* Modal Formulario crear/editar categoría */}
+          <Modal
+            open={showCatForm}
+            onClose={closeCatForm}
+            title={editingCat ? "Editar categoría" : "Nueva categoría"}
+            description="Ingresá el nombre de la categoría"
+            size="md"
+          >
+            <div className="space-y-4">
+              <Input
+                label="Nombre"
+                required
+                value={catForm.nombre}
+                onChange={(e) => setCatForm({ nombre: e.target.value })}
+                placeholder="Ej: Bebidas, Golosinas, Snacks..."
+              />
+            </div>
+
+            <ModalFooter>
+              <Button variant="ghost" onClick={closeCatForm} disabled={busy}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveCat} loading={busy}>
+                {editingCat ? "Guardar cambios" : "Crear categoría"}
+              </Button>
+            </ModalFooter>
+          </Modal>
 
           {/* Lista de categorías */}
-          <section className="card">
-            <div className="card__header">
-              <div className="card__title">Categorías</div>
-              <div className="muted">{categorias.length} categorías</div>
-            </div>
-            <div className="card__body">
-              <div style={{ display: "grid", gap: "0.75rem" }}>
-                {categorias.map((cat) => (
-                  <div
-                    key={cat.id}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "1rem",
-                      border: "1px solid #e0e0e0",
-                      borderRadius: "4px"
-                    }}
-                  >
-                    <div style={{ fontWeight: 500, fontSize: "1.125rem" }}>{cat.nombre}</div>
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
-                      <button
-                        className="btn"
-                        onClick={() => openCatForm(cat)}
-                        disabled={busy}
-                        style={{ fontSize: "0.875rem", padding: "0.5rem 1rem" }}
-                      >
-                        ✏️ Editar
-                      </button>
-                      <button
-                        className="btn"
-                        onClick={() => handleDeleteCat(cat.id, cat.nombre)}
-                        disabled={busy}
-                        style={{ fontSize: "0.875rem", padding: "0.5rem 1rem", color: "#d32f2f" }}
-                      >
-                        🗑️ Eliminar
-                      </button>
-                    </div>
-                  </div>
-                ))}
+          <Card>
+            <CardHeader>
+              <div>
+                <CardTitle>Categorías</CardTitle>
+                <CardDescription>{categorias.length} categorías</CardDescription>
               </div>
-            </div>
-          </section>
-        </>
+            </CardHeader>
+            <CardBody className="p-0">
+              {categorias.length === 0 ? (
+                <div className="text-center py-12">
+                  <Tag className="h-16 w-16 text-neutral-300 mx-auto mb-4" />
+                  <p className="text-neutral-500">No hay categorías</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-neutral-100">
+                  {categorias.map((cat) => (
+                    <div
+                      key={cat.id}
+                      className="flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-primary-100 rounded-lg">
+                          <Tag className="h-5 w-5 text-primary-600" />
+                        </div>
+                        <div className="font-medium text-lg text-neutral-900">{cat.nombre}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openCatForm(cat)}
+                          disabled={busy}
+                        >
+                          <Edit2 className="h-4 w-4" />
+                          Editar
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteCat(cat.id, cat.nombre)}
+                          disabled={busy}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Eliminar
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        </div>
       )}
+
+      {/* Confirm Dialogs */}
+      <ConfirmDialog
+        open={showDeleteProductConfirm}
+        onClose={() => {
+          setShowDeleteProductConfirm(false);
+          setDeleteProductData(null);
+        }}
+        onConfirm={confirmDeleteProduct}
+        title="Eliminar producto"
+        message={`¿Eliminar el producto "${deleteProductData?.nombre}"? Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        variant="danger"
+        loading={busy}
+      />
+
+      <ConfirmDialog
+        open={showDeleteCatConfirm}
+        onClose={() => {
+          setShowDeleteCatConfirm(false);
+          setDeleteCatData(null);
+        }}
+        onConfirm={confirmDeleteCat}
+        title="Eliminar categoría"
+        message={`¿Eliminar la categoría "${deleteCatData?.nombre}"? Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        variant="danger"
+        loading={busy}
+      />
     </div>
   );
 }

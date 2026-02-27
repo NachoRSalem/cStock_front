@@ -1,3 +1,4 @@
+// src/pages/Stock.tsx
 import { useEffect, useState } from "react";
 import { listStock, type Stock } from "../api/stock";
 import { listSucursales, type Sucursal } from "../api/locations";
@@ -31,6 +32,7 @@ export default function StockPage() {
   const [filterSubUbicacion, setFilterSubUbicacion] = useState<string>("all");
   const [soloConStock, setSoloConStock] = useState(true);
 
+  // Estados para admin
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [selectedSucursal, setSelectedSucursal] = useState<number | undefined>(undefined);
 
@@ -38,6 +40,7 @@ export default function StockPage() {
   const session = tokenStorage.getSession();
   const isAdmin = session?.rol === "admin";
 
+  // Cargar sucursales si es admin
   useEffect(() => {
     if (isAdmin) {
       listSucursales()
@@ -46,11 +49,12 @@ export default function StockPage() {
     }
   }, [isAdmin]);
 
-  useEffect(() => {
+  useEffect(() {
     async function load() {
       setErr(null);
       setLoading(true);
       try {
+        // Si es admin, usar selectedSucursal; si no, usar la sucursal del usuario
         const ubicacionParam = isAdmin ? selectedSucursal : sucursal;
         const data = await listStock({ 
           solo_con_stock: soloConStock,
@@ -67,6 +71,7 @@ export default function StockPage() {
     load();
   }, [soloConStock, sucursal, selectedSucursal, isAdmin]);
 
+  // Aplicar filtros locales
   useEffect(() => {
     let filtered = [...items];
     
@@ -123,6 +128,7 @@ export default function StockPage() {
     return <PageLoader message="Cargando inventario..." />;
   }
 
+  // Obtener nombre de sucursal
   const sucursalNombre = isAdmin
     ? selectedSucursal
       ? sucursales.find(s => s.id === selectedSucursal)?.nombre ?? "Todas las sucursales"
@@ -131,6 +137,7 @@ export default function StockPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-neutral-900">Stock - {sucursalNombre}</h1>
         <p className="text-sm text-neutral-500 mt-1">
@@ -138,8 +145,10 @@ export default function StockPage() {
         </p>
       </div>
 
+      {/* Alert de errores */}
       {err && <Alert variant="error">{err}</Alert>}
 
+      {/* Filtros */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -215,6 +224,7 @@ export default function StockPage() {
         </CardBody>
       </Card>
 
+      {/* Resumen - Cards de métricas */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="bg-gradient-to-br from-primary-50 to-white border-primary-100">
           <CardBody className="flex items-center gap-4">
@@ -241,6 +251,7 @@ export default function StockPage() {
         </Card>
       </div>
 
+      {/* Tabla de inventario */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">

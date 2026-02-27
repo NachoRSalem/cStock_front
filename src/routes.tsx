@@ -14,8 +14,6 @@ import Reports from "./pages/Reports";
 import Sales from "./pages/Sales";
 import Products from "./pages/Products";
 
-import OrdersApprovals from "./pages/OrdersApprovals";
-import Receive from "./pages/Receive";
 import Users from "./pages/Users";
 import Stock from "./pages/Stock";
 import NotFound from "./pages/NotFound";
@@ -34,7 +32,6 @@ export const router = createBrowserRouter([
       { path: "admin", element: <AdminDashboard /> },
       { path: "admin/locations", element: <Locations /> },
       { path: "admin/orders", element: <Orders /> },
-      { path: "admin/orders/aprobaciones", element: <OrdersApprovals /> },
       { path: "admin/sales", element: <Sales /> },
       { path: "admin/reports", element: <Reports /> },
       { path: "admin/users", element: <Users /> },
@@ -44,7 +41,6 @@ export const router = createBrowserRouter([
       { path: "sucursal", element: <BranchDashboard /> },
       { path: "sucursal/stock", element: <Stock /> },
       { path: "sucursal/orders", element: <Orders /> },
-      { path: "sucursal/receive", element: <Receive /> },
       { path: "sucursal/sales", element: <Sales /> },
 
 
