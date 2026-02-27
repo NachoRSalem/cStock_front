@@ -1,61 +1,188 @@
 import { useEffect, useState } from "react";
 import { listStock, type Stock } from "../api/stock";
 import { listSucursales, type Sucursal } from "../api/locations";
-import { 
-  Card, 
-  CardHeader, 
-  CardTitle, 
-  CardDescription, 
-  CardBody, 
-  Badge, 
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardBody,
+  Badge,
   PageLoader,
   Alert,
+  Button,
   Table,
   TableHeader,
   TableBody,
   TableRow,
   TableHead,
-  TableCell
+  TableCell,
 } from "../components/ui";
-import { 
-  Package, 
-  MapPin, 
-  Thermometer, 
-  Refrigerator, 
-  Snowflake, 
-  TrendingUp, 
+import {
+  Package,
+  Thermometer,
+  Refrigerator,
+  Snowflake,
+  Calendar,
+  TrendingUp,
   Filter,
+  ChevronDown,
+  ChevronRight,
   Building2,
-  Layers
+  Layers,
+  ArrowLeft,
+  Warehouse,
 } from "lucide-react";
-import clsx from 'clsx';
+import clsx from "clsx";
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function tipoIcon(tipo: string) {
+  switch (tipo) {
+    case "heladera": return <Refrigerator className="h-4 w-4" />;
+    case "freezer":  return <Snowflake    className="h-4 w-4" />;
+    default:         return <Thermometer  className="h-4 w-4" />;
+  }
+}
+
+function tipoBadgeVariant(tipo: string): "default" | "draft" | "pending" | "approved" {
+  if (tipo === "heladera") return "pending";
+  if (tipo === "freezer")  return "draft";
+  return "approved";
+}
+
+function stockColor(cantidad: number) {
+  if (cantidad <= 0)  return "text-red-600";
+  if (cantidad < 10)  return "text-orange-500";
+  if (cantidad < 20)  return "text-yellow-600";
+  return "text-emerald-600";
+}
+
+function subUbicTipoIcon(tipo: string) {
+  if (tipo === "freezer")  return <Snowflake    className="h-5 w-5 text-blue-500" />;
+  if (tipo === "heladera") return <Refrigerator className="h-5 w-5 text-teal-500" />;
+  return                          <Thermometer  className="h-5 w-5 text-amber-500" />;
+}
+
+function groupBy<T>(arr: T[], key: (item: T) => string): Record<string, T[]> {
+  return arr.reduce((acc, item) => {
+    const k = key(item);
+    (acc[k] = acc[k] || []).push(item);
+    return acc;
+  }, {} as Record<string, T[]>);
+}
+
+// ─── collapsible sub-ubicación panel ─────────────────────────────────────────
+
+function SubUbicPanel({ title, tipo, rows }: { title: string; tipo: string; rows: Stock[] }) {
+  const [open, setOpen] = useState(true);
+  const totalUnidades = rows.reduce((s, r) => s + r.cantidad, 0);
+  const bajoStock     = rows.filter((r) => r.cantidad > 0 && r.cantidad < 10).length;
+  const sinStock      = rows.filter((r) => r.cantidad <= 0).length;
+
+  return (
+    <Card className={clsx("overflow-hidden", !open && "shadow-sm")}>
+      <button
+        onClick={() => setOpen((p) => !p)}
+        className={clsx(
+          "w-full flex items-center justify-between px-5 py-4 text-left transition-colors",
+          open ? "bg-primary-50 border-b border-primary-100" : "hover:bg-neutral-50"
+        )}
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-white rounded-lg shadow-sm border border-primary-100">
+            {subUbicTipoIcon(tipo)}
+          </div>
+          <div>
+            <div className="font-semibold text-neutral-900">{title}</div>
+            <div className="flex items-center gap-3 text-xs text-neutral-500 mt-0.5">
+              <span>{rows.length} productos</span>
+              <span>·</span>
+              <span>{totalUnidades} unidades</span>
+              {bajoStock > 0 && <span className="text-orange-500 font-medium">⚠ {bajoStock} bajo stock</span>}
+              {sinStock  > 0 && <span className="text-red-500 font-medium">✕ {sinStock} sin stock</span>}
+            </div>
+          </div>
+        </div>
+        <div className="text-neutral-400">
+          {open ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+        </div>
+      </button>
+
+      {open && (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Producto</TableHead>
+                <TableHead className="text-center">Tipo</TableHead>
+                <TableHead className="text-right">Cantidad</TableHead>
+                <TableHead>Última act.</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>
+                    <span className="font-medium text-neutral-900">{item.producto_nombre}</span>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant={tipoBadgeVariant(item.producto_tipo_conservacion)}>
+                      <span className="flex items-center gap-1">
+                        {tipoIcon(item.producto_tipo_conservacion)}
+                        {item.producto_tipo_conservacion.charAt(0).toUpperCase() +
+                          item.producto_tipo_conservacion.slice(1)}
+                      </span>
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span className={clsx("font-bold text-lg", stockColor(item.cantidad))}>
+                      {item.cantidad}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-400">
+                      <Calendar className="h-3 w-3" />
+                      {new Date(item.ultima_actualizacion).toLocaleDateString("es-AR", {
+                        day: "2-digit", month: "2-digit", year: "numeric",
+                        hour: "2-digit", minute: "2-digit",
+                      })}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ─── main component ───────────────────────────────────────────────────────────
+
+type SelectedUbicacion = { id: number; nombre: string; tipo: string };
 
 export default function AdminStockView() {
-  const [items, setItems] = useState<Stock[]>([]);
-  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
-  const [filteredItems, setFilteredItems] = useState<Stock[]>([]);
-  const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  
-  const [filterTipo, setFilterTipo] = useState<string>("all");
-  const [filterSucursal, setFilterSucursal] = useState<string>("all");
-  const [filterSubUbicacion, setFilterSubUbicacion] = useState<string>("all");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [allStock, setAllStock]         = useState<Stock[]>([]);
+  const [sucursales, setSucursales]     = useState<Sucursal[]>([]);
+  const [err, setErr]                   = useState<string | null>(null);
+  const [loading, setLoading]           = useState(true);
   const [soloConStock, setSoloConStock] = useState(true);
-  const [groupBySubUbicacion, setGroupBySubUbicacion] = useState(true);
+  const [filterTipo, setFilterTipo]     = useState<string>("all");
+  const [selected, setSelected]         = useState<SelectedUbicacion | null>(null);
 
   useEffect(() => {
     async function load() {
       setErr(null);
       setLoading(true);
       try {
-        const [stockData, sucursalesData] = await Promise.all([
+        const [stockData, sucData] = await Promise.all([
           listStock({ solo_con_stock: soloConStock }),
-          listSucursales()
+          listSucursales(),
         ]);
-        setItems(stockData);
-        setFilteredItems(stockData);
-        setSucursales(sucursalesData);
+        setAllStock(stockData);
+        setSucursales(sucData);
+        setSelected(null); // reset drill-down on reload
       } catch (e: any) {
         setErr(e?.message ?? "Error cargando datos");
       } finally {
@@ -65,393 +192,272 @@ export default function AdminStockView() {
     load();
   }, [soloConStock]);
 
-  useEffect(() => {
-    let filtered = [...items];
-    
-    if (filterTipo !== "all") {
-      filtered = filtered.filter(item => item.producto_tipo_conservacion === filterTipo);
-    }
-    
-    if (filterSucursal !== "all") {
-      filtered = filtered.filter(item => item.ubicacion_id.toString() === filterSucursal);
-    }
-    
-    if (filterSubUbicacion !== "all") {
-      filtered = filtered.filter(item => item.sub_ubicacion.toString() === filterSubUbicacion);
-    }
+  if (loading) return <PageLoader message="Cargando stock global..." />;
 
-    if (searchTerm) {
-      filtered = filtered.filter(item => 
-        item.producto_nombre.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
+  // Apply tipo filter globally
+  const filtered = filterTipo === "all"
+    ? allStock
+    : allStock.filter((i) => i.producto_tipo_conservacion === filterTipo);
 
-    // Ordenar por sub-ubicación si está habilitado
-    if (groupBySubUbicacion) {
-      filtered.sort((a, b) => {
-        const subComp = a.sub_ubicacion_nombre.localeCompare(b.sub_ubicacion_nombre);
-        if (subComp !== 0) return subComp;
-        return a.producto_nombre.localeCompare(b.producto_nombre);
-      });
-    }
-    
-    setFilteredItems(filtered);
-  }, [items, filterTipo, filterSucursal, filterSubUbicacion, searchTerm, groupBySubUbicacion]);
-
-  const subUbicaciones = Array.from(
-    new Map(items.map(item => [item.sub_ubicacion, item.sub_ubicacion_nombre])).entries()
+  // ── FILTER BAR (shared) ────────────────────────────────────────────────────
+  const filterBar = (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Filter className="h-5 w-5 text-primary-600" />
+          <CardTitle className="text-base">Filtros</CardTitle>
+        </div>
+      </CardHeader>
+      <CardBody>
+        <div className="flex flex-wrap gap-4 items-end">
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">
+              Tipo de conservación
+            </label>
+            <select
+              value={filterTipo}
+              onChange={(e) => setFilterTipo(e.target.value)}
+              className="px-3.5 py-2.5 rounded-xl border text-sm bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+            >
+              <option value="all">Todos</option>
+              <option value="ambiente">Ambiente</option>
+              <option value="heladera">Heladera</option>
+              <option value="freezer">Freezer</option>
+            </select>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer px-4 py-2.5 rounded-xl border border-neutral-300 hover:border-primary-400 hover:bg-primary-50 transition-all">
+            <input
+              type="checkbox"
+              checked={soloConStock}
+              onChange={(e) => setSoloConStock(e.target.checked)}
+              className="w-4 h-4 text-primary-600 border-neutral-300 rounded focus:ring-primary-500"
+            />
+            <span className="text-sm font-medium text-neutral-700">Solo con stock</span>
+          </label>
+        </div>
+      </CardBody>
+    </Card>
   );
 
-  const totalProductos = filteredItems.length;
-  const totalUnidades = filteredItems.reduce((sum, item) => sum + item.cantidad, 0);
-  const totalSucursales = new Set(filteredItems.map(item => item.ubicacion_id)).size;
-  const totalSubUbicaciones = new Set(filteredItems.map(item => item.sub_ubicacion)).size;
+  // ── DETAIL VIEW (selected location) ───────────────────────────────────────
+  if (selected) {
+    const locationItems = filtered.filter((i) => i.ubicacion_id === selected.id);
+    const bySubUb = groupBy(
+      locationItems,
+      (i) => `${i.sub_ubicacion}|||${i.sub_ubicacion_nombre}|||${i.sub_ubicacion_tipo}`
+    );
+    const totalUnidades = locationItems.reduce((s, i) => s + i.cantidad, 0);
 
-  const getTipoIcon = (tipo: string) => {
-    switch (tipo) {
-      case "ambiente":
-        return <Thermometer className="h-4 w-4" />;
-      case "heladera":
-        return <Refrigerator className="h-4 w-4" />;
-      case "freezer":
-        return <Snowflake className="h-4 w-4" />;
-      default:
-        return <Package className="h-4 w-4" />;
-    }
-  };
+    return (
+      <div className="space-y-6">
+        {/* header */}
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => setSelected(null)}>
+            <ArrowLeft className="h-4 w-4" />
+            Volver
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-neutral-900">{selected.nombre}</h1>
+            <p className="text-sm text-neutral-500 mt-0.5">
+              Stock agrupado por sub-ubicación
+            </p>
+          </div>
+        </div>
 
-  const getTipoBadgeVariant = (tipo: string): "default" | "draft" | "pending" | "approved" => {
-    switch (tipo) {
-      case "ambiente":
-        return "approved";
-      case "heladera":
-        return "pending";
-      case "freezer":
-        return "draft";
-      default:
-        return "default";
-    }
-  };
+        {err && <Alert variant="error">{err}</Alert>}
+        {filterBar}
 
-  const getCantidadColor = (cantidad: number) => {
-    if (cantidad < 10) return "text-red-600";
-    if (cantidad < 50) return "text-orange-600";
-    return "text-emerald-600";
-  };
+        {/* summary */}
+        <div className="grid grid-cols-2 gap-4">
+          <Card className="bg-gradient-to-br from-primary-50 to-white border-primary-100">
+            <CardBody className="flex items-center gap-4">
+              <div className="p-3 bg-primary-100 rounded-xl">
+                <Package className="h-6 w-6 text-primary-600" />
+              </div>
+              <div>
+                <div className="text-sm text-neutral-500">Registros</div>
+                <div className="text-3xl font-bold text-neutral-900">{locationItems.length}</div>
+              </div>
+            </CardBody>
+          </Card>
+          <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-100">
+            <CardBody className="flex items-center gap-4">
+              <div className="p-3 bg-emerald-100 rounded-xl">
+                <TrendingUp className="h-6 w-6 text-emerald-600" />
+              </div>
+              <div>
+                <div className="text-sm text-neutral-500">Unidades totales</div>
+                <div className="text-3xl font-bold text-neutral-900">{totalUnidades}</div>
+              </div>
+            </CardBody>
+          </Card>
+        </div>
 
-  const getSucursalNombre = (ubicacionId: number) => {
-    return sucursales.find(s => s.id === ubicacionId)?.nombre ?? "Desconocida";
-  };
-
-  if (loading) {
-    return <PageLoader message="Cargando stock global..." />;
+        {locationItems.length === 0 ? (
+          <Card>
+            <CardBody className="text-center py-12">
+              <Package className="h-16 w-16 text-neutral-300 mx-auto mb-4" />
+              <p className="text-neutral-500">No hay productos en stock con los filtros actuales</p>
+            </CardBody>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm text-neutral-500">
+              <Layers className="h-4 w-4" />
+              <span>{Object.keys(bySubUb).length} sub-ubicaciones</span>
+            </div>
+            {Object.entries(bySubUb)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([key, rows]) => {
+                const [, nombre, tipo] = key.split("|||");
+                return (
+                  <SubUbicPanel
+                    key={key}
+                    title={nombre}
+                    tipo={tipo ?? "ambiente"}
+                    rows={rows}
+                  />
+                );
+              })}
+          </div>
+        )}
+      </div>
+    );
   }
 
-  // Agrupar items por sub-ubicación para renderizado
-  const groupedItems: { [key: string]: Stock[] } = {};
-  if (groupBySubUbicacion) {
-    filteredItems.forEach(item => {
-      const key = item.sub_ubicacion_nombre;
-      if (!groupedItems[key]) {
-        groupedItems[key] = [];
-      }
-      groupedItems[key].push(item);
-    });
-  }
-
+  // ── INDEX VIEW (location cards) ────────────────────────────────────────────
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Stock Global - Todas las Sucursales</h1>
-        <p className="text-gray-600 mt-1">
-          Vista consolidada del inventario de todas las ubicaciones
+        <h1 className="text-2xl font-bold text-neutral-900">Stock Global</h1>
+        <p className="text-sm text-neutral-500 mt-1">
+          Seleccioná una ubicación para ver su inventario detallado
         </p>
       </div>
 
       {err && <Alert variant="error">{err}</Alert>}
+      {filterBar}
 
-      {/* Tarjetas de métricas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* global summary */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-100">
           <CardBody className="flex items-center gap-4">
             <div className="p-3 bg-blue-100 rounded-xl">
               <Building2 className="h-6 w-6 text-blue-600" />
             </div>
             <div>
-              <div className="text-sm text-gray-600">Sucursales</div>
-              <div className="text-3xl font-bold text-gray-900">{totalSucursales}</div>
+              <div className="text-sm text-neutral-500">Ubicaciones</div>
+              <div className="text-3xl font-bold text-neutral-900">{sucursales.length}</div>
             </div>
           </CardBody>
         </Card>
-
         <Card className="bg-gradient-to-br from-purple-50 to-white border-purple-100">
           <CardBody className="flex items-center gap-4">
             <div className="p-3 bg-purple-100 rounded-xl">
               <Layers className="h-6 w-6 text-purple-600" />
             </div>
             <div>
-              <div className="text-sm text-gray-600">Sub-ubicaciones</div>
-              <div className="text-3xl font-bold text-gray-900">{totalSubUbicaciones}</div>
+              <div className="text-sm text-neutral-500">Sub-ubicaciones</div>
+              <div className="text-3xl font-bold text-neutral-900">
+                {new Set(filtered.map((i) => i.sub_ubicacion)).size}
+              </div>
             </div>
           </CardBody>
         </Card>
-
         <Card className="bg-gradient-to-br from-primary-50 to-white border-primary-100">
           <CardBody className="flex items-center gap-4">
             <div className="p-3 bg-primary-100 rounded-xl">
               <Package className="h-6 w-6 text-primary-600" />
             </div>
             <div>
-              <div className="text-sm text-gray-600">Productos</div>
-              <div className="text-3xl font-bold text-gray-900">{totalProductos}</div>
+              <div className="text-sm text-neutral-500">Productos</div>
+              <div className="text-3xl font-bold text-neutral-900">{filtered.length}</div>
             </div>
           </CardBody>
         </Card>
-
         <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-100">
           <CardBody className="flex items-center gap-4">
             <div className="p-3 bg-emerald-100 rounded-xl">
               <TrendingUp className="h-6 w-6 text-emerald-600" />
             </div>
             <div>
-              <div className="text-sm text-gray-600">Total unidades</div>
-              <div className="text-3xl font-bold text-gray-900">{totalUnidades}</div>
+              <div className="text-sm text-neutral-500">Total unidades</div>
+              <div className="text-3xl font-bold text-neutral-900">
+                {filtered.reduce((s, i) => s + i.cantidad, 0)}
+              </div>
             </div>
           </CardBody>
         </Card>
       </div>
 
-      {/* Filtros */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Filter className="h-5 w-5 text-primary-600" />
-            <CardTitle className="text-base">Filtros y búsqueda</CardTitle>
-          </div>
-        </CardHeader>
-        <CardBody>
-          <div className="space-y-4">
-            {/* Buscador */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Buscar producto
-              </label>
-              <input
-                type="text"
-                placeholder="Buscar por nombre de producto..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-gray-300 hover:border-gray-400"
-              />
-            </div>
+      {/* location cards grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {sucursales
+          .sort((a, b) => {
+            if (a.tipo === "almacen" && b.tipo !== "almacen") return 1;
+            if (b.tipo === "almacen" && a.tipo !== "almacen") return -1;
+            return a.nombre.localeCompare(b.nombre);
+          })
+          .map((suc) => {
+            // Find rows for this location in the (filtered) all stock
+            const rows     = filtered.filter((i) => i.ubicacion_id === suc.id);
+            const total    = rows.reduce((s, r) => s + r.cantidad, 0);
+            const bajo     = rows.filter((r) => r.cantidad > 0 && r.cantidad < 10).length;
+            const sinSt    = rows.filter((r) => r.cantidad <= 0).length;
+            const isAlmacen = suc.tipo === "almacen";
 
-            {/* Filtros en grid */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Sucursal
-                </label>
-                <select 
-                  value={filterSucursal} 
-                  onChange={(e) => setFilterSucursal(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-gray-300 hover:border-gray-400"
-                >
-                  <option value="all">Todas</option>
-                  {sucursales.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tipo de conservación
-                </label>
-                <select 
-                  value={filterTipo} 
-                  onChange={(e) => setFilterTipo(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-gray-300 hover:border-gray-400"
-                >
-                  <option value="all">Todos</option>
-                  <option value="ambiente">Ambiente</option>
-                  <option value="heladera">Heladera</option>
-                  <option value="freezer">Freezer</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Sub-ubicación
-                </label>
-                <select 
-                  value={filterSubUbicacion} 
-                  onChange={(e) => setFilterSubUbicacion(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-gray-300 hover:border-gray-400"
-                >
-                  <option value="all">Todas</option>
-                  {subUbicaciones.map(([id, nombre]) => (
-                    <option key={id} value={id.toString()}>{nombre}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex flex-col justify-end gap-2">
-                <label className="flex items-center gap-2 cursor-pointer px-4 py-2.5 rounded-xl border border-gray-300 hover:border-primary-400 hover:bg-primary-50 transition-all">
-                  <input 
-                    type="checkbox" 
-                    checked={soloConStock} 
-                    onChange={(e) => setSoloConStock(e.target.checked)}
-                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                  />
-                  <span className="text-sm font-medium text-gray-700">Solo con stock</span>
-                </label>
-              </div>
-            </div>
-
-            {/* Toggle de agrupación */}
-            <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
-              <label className="flex items-center gap-2 cursor-pointer px-4 py-2.5 rounded-xl border border-gray-300 hover:border-emerald-400 hover:bg-emerald-50 transition-all">
-                <input 
-                  type="checkbox" 
-                  checked={groupBySubUbicacion} 
-                  onChange={(e) => setGroupBySubUbicacion(e.target.checked)}
-                  className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
-                />
-                <span className="text-sm font-medium text-gray-700">Agrupar por sub-ubicación</span>
-              </label>
-            </div>
-          </div>
-        </CardBody>
-      </Card>
-
-      {/* Tabla de stock */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Inventario Global</CardTitle>
-          <CardDescription>
-            {filteredItems.length} productos encontrados
-          </CardDescription>
-        </CardHeader>
-        <CardBody className="p-0">
-          {filteredItems.length === 0 ? (
-            <div className="text-center py-12">
-              <Package className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">No hay productos en stock</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              {groupBySubUbicacion ? (
-                // Vista agrupada por sub-ubicación
-                <div className="divide-y divide-gray-200">
-                  {Object.entries(groupedItems).map(([subUbicacion, items]) => (
-                    <div key={subUbicacion}>
-                      {/* Header de grupo */}
-                      <div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-5 w-5 text-primary-600" />
-                          <h3 className="font-semibold text-gray-900">{subUbicacion}</h3>
-                          <Badge variant="default" className="ml-2">
-                            {items.length} productos
-                          </Badge>
-                        </div>
-                      </div>
-
-                      {/* Tabla de items del grupo */}
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Producto</TableHead>
-                            <TableHead>Sucursal</TableHead>
-                            <TableHead className="text-center">Tipo</TableHead>
-                            <TableHead className="text-right">Cantidad</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {items.map((item) => (
-                            <TableRow key={item.id}>
-                              <TableCell>
-                                <div className="font-medium text-gray-900">{item.producto_nombre}</div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                  <Building2 className="h-3 w-3" />
-                                  {getSucursalNombre(item.ubicacion_id)}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <Badge variant={getTipoBadgeVariant(item.producto_tipo_conservacion)}>
-                                  <div className="flex items-center gap-1.5">
-                                    {getTipoIcon(item.producto_tipo_conservacion)}
-                                    {item.producto_tipo_conservacion.charAt(0).toUpperCase() + item.producto_tipo_conservacion.slice(1)}
-                                  </div>
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <span className={clsx("font-bold text-lg", getCantidadColor(item.cantidad))}>
-                                  {item.cantidad}
-                                </span>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ))}
+            return (
+              <button
+                key={suc.id}
+                onClick={() => setSelected({ id: suc.id, nombre: suc.nombre, tipo: suc.tipo })}
+                className={clsx(
+                  "text-left rounded-2xl border-2 p-5 transition-all hover:shadow-md hover:-translate-y-0.5",
+                  isAlmacen
+                    ? "border-amber-200 bg-amber-50 hover:border-amber-400"
+                    : "border-primary-100 bg-white hover:border-primary-400"
+                )}
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className={clsx("p-2.5 rounded-xl", isAlmacen ? "bg-amber-100" : "bg-primary-100")}>
+                    {isAlmacen
+                      ? <Warehouse  className="h-6 w-6 text-amber-600" />
+                      : <Building2  className="h-6 w-6 text-primary-600" />}
+                  </div>
+                  <Badge variant={isAlmacen ? "pending" : "default"}>
+                    {isAlmacen ? "Almacén" : "Sucursal"}
+                  </Badge>
                 </div>
-              ) : (
-                // Vista normal sin agrupar
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Producto</TableHead>
-                      <TableHead>Sucursal</TableHead>
-                      <TableHead>Sub-ubicación</TableHead>
-                      <TableHead className="text-center">Tipo</TableHead>
-                      <TableHead className="text-right">Cantidad</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredItems.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell>
-                          <div className="font-medium text-gray-900">{item.producto_nombre}</div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Building2 className="h-3 w-3" />
-                            {getSucursalNombre(item.ubicacion_id)}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <MapPin className="h-3 w-3" />
-                            {item.sub_ubicacion_nombre}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant={getTipoBadgeVariant(item.producto_tipo_conservacion)}>
-                            <div className="flex items-center gap-1.5">
-                              {getTipoIcon(item.producto_tipo_conservacion)}
-                              {item.producto_tipo_conservacion.charAt(0).toUpperCase() + item.producto_tipo_conservacion.slice(1)}
-                            </div>
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className={clsx("font-bold text-lg", getCantidadColor(item.cantidad))}>
-                            {item.cantidad}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-          )}
-        </CardBody>
-      </Card>
+
+                <div className="font-semibold text-neutral-900 text-lg leading-tight mb-1">
+                  {suc.nombre}
+                </div>
+
+                <div className="flex items-center gap-4 mt-3 text-sm">
+                  <span className="text-neutral-500">
+                    <span className="font-bold text-neutral-800">{rows.length}</span> productos
+                  </span>
+                  <span className="text-neutral-500">
+                    <span className="font-bold text-neutral-800">{total}</span> uds.
+                  </span>
+                </div>
+
+                {(bajo > 0 || sinSt > 0) && (
+                  <div className="flex items-center gap-3 mt-2 text-xs">
+                    {bajo  > 0 && <span className="text-orange-500 font-medium">⚠ {bajo} bajo stock</span>}
+                    {sinSt > 0 && <span className="text-red-500   font-medium">✕ {sinSt} sin stock</span>}
+                  </div>
+                )}
+
+                <div className={clsx(
+                  "mt-4 text-xs font-medium",
+                  isAlmacen ? "text-amber-600" : "text-primary-600"
+                )}>
+                  Ver detalle →
+                </div>
+              </button>
+            );
+          })}
+      </div>
     </div>
   );
 }

@@ -96,6 +96,7 @@ export function Layout() {
       { to: "/sucursal/stock", label: "Mi stock", icon: <Warehouse className="h-5 w-5" />, roles: ["sucursal"] },
       { to: "/sucursal/orders", label: "Mis pedidos", icon: <ClipboardCheck className="h-5 w-5" />, roles: ["sucursal"] },
       { to: "/sucursal/sales", label: "Registrar venta", icon: <ShoppingCart className="h-5 w-5" />, roles: ["sucursal"] },
+      { to: "/sucursal/ventas", label: "Mis ventas", icon: <BarChart3 className="h-5 w-5" />, roles: ["sucursal"] },
     ],
     []
   );
