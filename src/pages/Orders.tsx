@@ -87,7 +87,7 @@ export default function Orders() {
   const [disponibilidadSucursales, setDisponibilidadSucursales] = useState<DisponibilidadSucursal[]>([]);
   const [sucursalOrigenSeleccionada, setSucursalOrigenSeleccionada] = useState<number | null>(null);
   const [sucursalOrigenStock, setSucursalOrigenStock] = useState<StockItem[]>([]);
-  const [sucursalUbicaciones, setSucursalUbicaciones] = useState<Record<number, number>>({});
+  const [sucursalUbicaciones, setSucursalUbicaciones] = useState<Record<number, Array<{sub_ubicacion: number, cantidad: number}>>>({}); // itemId -> [{sub_ubicacion, cantidad}]
 
   // Estados para edición de pedido
   const [showEdit, setShowEdit] = useState(false);
@@ -531,11 +531,26 @@ export default function Orders() {
   async function confirmAprobarDesdeSucursal() {
     if (!pedidoToApprove || !sucursalOrigenSeleccionada) return;
     
-    // Validar que todos los items tengan sub_ubicacion_origen asignada
-    const itemsSinUbicacion = pedidoToApprove.items.filter(item => !sucursalUbicaciones[item.id]);
+    // Validar que todos los items tengan sub-ubicaciones asignadas
+    const itemsSinUbicacion = pedidoToApprove.items.filter(item => {
+      const ubicaciones = sucursalUbicaciones[item.id];
+      return !ubicaciones || ubicaciones.length === 0;
+    });
+    
     if (itemsSinUbicacion.length > 0) {
-      setErr("Debes asignar una sub-ubicación de origen para todos los productos");
+      setErr("Debes asignar al menos una sub-ubicación de origen para todos los productos");
       return;
+    }
+    
+    // Validar que las cantidades sumen correctamente
+    for (const item of pedidoToApprove.items) {
+      const ubicaciones = sucursalUbicaciones[item.id];
+      const totalAsignado = ubicaciones.reduce((sum, u) => sum + u.cantidad, 0);
+      
+      if (totalAsignado !== item.cantidad) {
+        setErr(`El producto "${item.producto_nombre}" requiere ${item.cantidad} unidades pero se asignaron ${totalAsignado}`);
+        return;
+      }
     }
     
     setBusy(true);
@@ -544,7 +559,7 @@ export default function Orders() {
     try {
       const items = pedidoToApprove.items.map(item => ({
         id: item.id,
-        sub_ubicacion_origen: sucursalUbicaciones[item.id]
+        sub_ubicaciones_origen: sucursalUbicaciones[item.id]
       }));
       
       await aprobarPedido(pedidoToApprove.id, {
@@ -1740,9 +1755,9 @@ export default function Orders() {
 
             {/* Si hay sucursal seleccionada, mostrar asignación por producto */}
             {sucursalOrigenSeleccionada && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="text-sm font-medium text-neutral-700">
-                  Asignar sub-ubicación para cada producto
+                  Asignar sub-ubicaciones para cada producto
                 </div>
                 {pedidoToApprove.items.map((item) => {
                   const sucursalInfo = sucursales.find(s => s.id === sucursalOrigenSeleccionada);
@@ -1751,46 +1766,129 @@ export default function Orders() {
                       .filter(s => s.producto === item.producto)
                       .map(s => [s.sub_ubicacion, s.cantidad])
                   );
-                  const subUbicSelected = sucursalUbicaciones[item.id];
-                  const stockDisponible = subUbicSelected ? (stockPorSubUbicacion[subUbicSelected] ?? 0) : null;
-                  const stockInsuficiente = stockDisponible !== null && stockDisponible < item.cantidad;
+                  
+                  const ubicacionesAsignadas = sucursalUbicaciones[item.id] || [];
+                  const totalAsignado = ubicacionesAsignadas.reduce((sum, u) => sum + u.cantidad, 0);
+                  const faltante = item.cantidad - totalAsignado;
+                  const cumple = faltante === 0;
 
                   return (
-                    <div key={item.id} className="flex items-center gap-3 p-3 bg-white border border-neutral-200 rounded-lg">
-                      <div className="flex-1">
-                        <div className="font-medium text-sm text-neutral-900">{item.producto_nombre}</div>
-                        <div className="text-xs text-neutral-500">Cantidad pedida: {item.cantidad}</div>
-                        {stockInsuficiente && (
-                          <div className="text-xs text-red-600 font-medium mt-0.5">
-                            ⚠️ Stock insuficiente (disponible: {stockDisponible})
+                    <div key={item.id} className="p-4 bg-white border border-neutral-200 rounded-lg space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="font-medium text-sm text-neutral-900">{item.producto_nombre}</div>
+                          <div className="text-xs text-neutral-500">Cantidad pedida: {item.cantidad}</div>
+                          <div className={`text-xs font-medium mt-1 ${ cumple ? 'text-emerald-600' : totalAsignado > item.cantidad ? 'text-red-600' : 'text-amber-600' }`}>
+                            {cumple ? (
+                              <>✓ Asignado completo: {totalAsignado}</>
+                            ) : totalAsignado > item.cantidad ? (
+                              <>⚠️ Excede en {totalAsignado - item.cantidad} unidades</>
+                            ) : (
+                              <>⚠️ Faltan {faltante} unidades</>
+                            )}
                           </div>
-                        )}
-                        {stockDisponible !== null && !stockInsuficiente && (
-                          <div className="text-xs text-emerald-600 font-medium mt-0.5">
-                            ✓ Disponible: {stockDisponible} unidades
-                          </div>
-                        )}
+                        </div>
                       </div>
-                      <select
-                        value={sucursalUbicaciones[item.id] ?? ""}
-                        onChange={(e) => setSucursalUbicaciones(prev => ({
-                          ...prev,
-                          [item.id]: Number(e.target.value)
-                        }))}
-                        className={`px-3 py-2 rounded-xl border text-sm bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent ${
-                          stockInsuficiente ? 'border-red-400' : 'border-neutral-300'
-                        }`}
-                      >
-                        <option value="">Sub-ubicación...</option>
-                        {sucursalInfo?.sub_ubicaciones.map(sub => {
-                          const qty = stockPorSubUbicacion[sub.id] ?? 0;
-                          return (
-                            <option key={sub.id} value={sub.id}>
-                              {sub.nombre} ({sub.tipo}) — stock: {qty}
-                            </option>
-                          );
-                        })}
-                      </select>
+
+                      {/* Lista de sub-ubicaciones asignadas */}
+                      {ubicacionesAsignadas.length > 0 && (
+                        <div className="space-y-2">
+                          {ubicacionesAsignadas.map((ub, index) => {
+                            const subUbicInfo = sucursalInfo?.sub_ubicaciones.find(s => s.id === ub.sub_ubicacion);
+                            const stockDisp = stockPorSubUbicacion[ub.sub_ubicacion] ?? 0;
+                            const excedeStock = ub.cantidad > stockDisp;
+                            
+                            return (
+                              <div key={index} className={`flex items-center gap-2 p-2 rounded border ${excedeStock ? 'border-red-300 bg-red-50' : 'border-neutral-200'}`}>
+                                <div className="flex-1 text-xs">
+                                  <div className="font-medium">{subUbicInfo?.nombre} ({subUbicInfo?.tipo})</div>
+                                  <div className="text-neutral-500">Stock disponible: {stockDisp}</div>
+                                  {excedeStock && (
+                                    <div className="text-red-600 font-medium">⚠️ Cantidad excede stock disponible</div>
+                                  )}
+                                </div>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max={stockDisp}
+                                  value={ub.cantidad}
+                                  onChange={(e) => {
+                                    const newCantidad = parseInt(e.target.value) || 0;
+                                    setSucursalUbicaciones(prev => ({
+                                      ...prev,
+                                      [item.id]: prev[item.id].map((u, i) => 
+                                        i === index ? { ...u, cantidad: newCantidad } : u
+                                      )
+                                    }));
+                                  }}
+                                  className="w-20 px-2 py-1 rounded border text-sm border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                                />
+                                <button
+                                  onClick={() => {
+                                    setSucursalUbicaciones(prev => ({
+                                      ...prev,
+                                      [item.id]: prev[item.id].filter((_, i) => i !== index)
+                                    }));
+                                  }}
+                                  className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                  title="Quitar"
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Botón agregar sub-ubicación */}
+                      <div className="flex gap-2">
+                        <select
+                          id={`select-sub-${item.id}`}
+                          className="flex-1 px-3 py-2 rounded-xl border text-sm bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent border-neutral-300"
+                        >
+                          <option value="">Seleccionar sub-ubicación...</option>
+                          {sucursalInfo?.sub_ubicaciones
+                            .filter(sub => {
+                              // No mostrar las ya seleccionadas
+                              const yaSeleccionada = ubicacionesAsignadas.some(u => u.sub_ubicacion === sub.id);
+                              return !yaSeleccionada && (stockPorSubUbicacion[sub.id] ?? 0) > 0;
+                            })
+                            .map(sub => {
+                              const qty = stockPorSubUbicacion[sub.id] ?? 0;
+                              return (
+                                <option key={sub.id} value={sub.id}>
+                                  {sub.nombre} ({sub.tipo}) — stock: {qty}
+                                </option>
+                              );
+                            })}
+                        </select>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            const selectEl = document.getElementById(`select-sub-${item.id}`) as HTMLSelectElement;
+                            const subUbicacionId = Number(selectEl.value);
+                            
+                            if (!subUbicacionId) return;
+                            
+                            const stockDisp = stockPorSubUbicacion[subUbicacionId] ?? 0;
+                            const cantidadSugerida = Math.min(faltante, stockDisp);
+                            
+                            setSucursalUbicaciones(prev => ({
+                              ...prev,
+                              [item.id]: [
+                                ...(prev[item.id] || []),
+                                { sub_ubicacion: subUbicacionId, cantidad: cantidadSugerida }
+                              ]
+                            }));
+                            
+                            selectEl.value = "";
+                          }}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   );
                 })}
@@ -1816,11 +1914,20 @@ export default function Orders() {
                 variant="success"
                 onClick={confirmAprobarDesdeSucursal}
                 disabled={busy || !sucursalOrigenSeleccionada || pedidoToApprove.items.some(item => {
-                  if (!sucursalUbicaciones[item.id]) return true;
-                  const qty = sucursalOrigenStock.find(
-                    s => s.producto === item.producto && s.sub_ubicacion === sucursalUbicaciones[item.id]
-                  )?.cantidad ?? 0;
-                  return qty < item.cantidad;
+                  const ubicacionesAsignadas = sucursalUbicaciones[item.id];
+                  if (!ubicacionesAsignadas || ubicacionesAsignadas.length === 0) return true;
+                  
+                  // Validar que la suma sea igual a la cantidad pedida
+                  const totalAsignado = ubicacionesAsignadas.reduce((sum, u) => sum + u.cantidad, 0);
+                  if (totalAsignado !== item.cantidad) return true;
+                  
+                  // Validar que cada asignación tenga stock suficiente
+                  return ubicacionesAsignadas.some(ub => {
+                    const qty = sucursalOrigenStock.find(
+                      s => s.producto === item.producto && s.sub_ubicacion === ub.sub_ubicacion
+                    )?.cantidad ?? 0;
+                    return qty < ub.cantidad;
+                  });
                 })}
                 loading={busy}
               >
