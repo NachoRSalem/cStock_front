@@ -1,6 +1,7 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { tokenStorage } from "../utils/storage";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { listPedidos } from "../api/orders";
 import clsx from "clsx";
 import {
   Home,
@@ -34,6 +35,7 @@ function NavLink({
   roleType,
   onClick,
   collapsed,
+  badge,
 }: {
   to: string;
   label: string;
@@ -41,6 +43,7 @@ function NavLink({
   roleType?: "admin" | "sucursal" | "shared";
   onClick?: () => void;
   collapsed?: boolean;
+  badge?: number;
 }) {
   const loc = useLocation();
   const active = loc.pathname === to || (to !== "/" && loc.pathname.startsWith(to));
@@ -51,7 +54,7 @@ function NavLink({
       onClick={onClick}
       title={collapsed ? label : undefined}
       className={clsx(
-        "flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all group",
+        "flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all group relative",
         collapsed && "justify-center",
         active
           ? roleType === "admin"
@@ -65,7 +68,26 @@ function NavLink({
       <span className={clsx("flex-shrink-0", active ? "text-white" : "text-neutral-500 group-hover:text-neutral-700")}>
         {icon}
       </span>
-      {!collapsed && <span className="flex-1">{label}</span>}
+      {!collapsed && (
+        <>
+          <span className="flex-1">{label}</span>
+          {badge !== undefined && badge > 0 && (
+            <span className={clsx(
+              "inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold",
+              active 
+                ? "bg-white text-neutral-900"
+                : "bg-red-500 text-white"
+            )}>
+              {badge > 99 ? '99+' : badge}
+            </span>
+          )}
+        </>
+      )}
+      {collapsed && badge !== undefined && badge > 0 && (
+        <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-xs font-bold border-2 border-white">
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
     </Link>
   );
 }
@@ -74,10 +96,43 @@ export function Layout() {
   const nav = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [pedidosPendientes, setPedidosPendientes] = useState(0);
 
   const role = tokenStorage.getRole();
   const username = tokenStorage.getUsername();
   const sucursal = tokenStorage.getSucursal();
+  const session = tokenStorage.getSession();
+
+  // Cargar pedidos pendientes
+  useEffect(() => {
+    async function loadPendientes() {
+      try {
+        const pedidos = await listPedidos();
+        
+        if (role === "admin") {
+          // Admin: contar pedidos pendientes (enviados a revisión)
+          const pendientes = pedidos.filter(p => p.estado === "pendiente").length;
+          setPedidosPendientes(pendientes);
+        } else if (role === "sucursal") {
+          // Sucursal: contar pedidos aprobados destinados a esta sucursal
+          const aprobados = pedidos.filter(p => 
+            p.estado === "aprobado" && p.destino === session?.sucursal
+          ).length;
+          setPedidosPendientes(aprobados);
+        }
+      } catch (err) {
+        // Ignorar errores silenciosamente
+        console.error("Error loading pedidos:", err);
+      }
+    }
+
+    loadPendientes();
+    
+    // Recargar cada 30 segundos
+    const interval = setInterval(loadPendientes, 30000);
+    
+    return () => clearInterval(interval);
+  }, [role, session?.sucursal]);
 
   const navItems: NavItem[] = useMemo(
     () => [
@@ -180,6 +235,10 @@ export function Layout() {
             type = "sucursal";
           }
 
+          // Agregar badge a los links de pedidos
+          const isPedidosLink = it.to === "/admin/orders" || it.to === "/sucursal/orders";
+          const badge = isPedidosLink ? pedidosPendientes : undefined;
+
           return (
             <NavLink
               key={it.to}
@@ -189,6 +248,7 @@ export function Layout() {
               roleType={type}
               onClick={closeMobileSidebar}
               collapsed={sidebarCollapsed}
+              badge={badge}
             />
           );
         })}

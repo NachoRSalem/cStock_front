@@ -1056,11 +1056,17 @@ export default function Orders() {
                             className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
                           >
                             <option value="">Seleccionar producto...</option>
-                            {productos.map(p => (
-                              <option key={p.id} value={p.id}>
-                                {p.nombre} - {p.categoria_nombre || "Sin categoría"} - ${p.costo_compra}
-                              </option>
-                            ))}
+                            {productos
+                              .filter(p => {
+                                // Mostrar el producto actual o productos no seleccionados
+                                const yaSeleccionado = items.some((it, idx) => idx !== index && it.producto === p.id);
+                                return !yaSeleccionado;
+                              })
+                              .map(p => (
+                                <option key={p.id} value={p.id}>
+                                  {p.nombre} - {p.categoria_nombre || "Sin categoría"} - ${p.costo_compra}
+                                </option>
+                              ))}
                           </select>
                           
                           <div className="grid grid-cols-2 gap-3">
@@ -1207,11 +1213,17 @@ export default function Orders() {
                             className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
                           >
                             <option value="">Seleccionar producto...</option>
-                            {productos.map(p => (
-                              <option key={p.id} value={p.id}>
-                                {p.nombre} - {p.categoria_nombre || "Sin categoría"} - ${p.costo_compra}
-                              </option>
-                            ))}
+                            {productos
+                              .filter(p => {
+                                // Mostrar el producto actual o productos no seleccionados
+                                const yaSeleccionado = items.some((it, idx) => idx !== index && it.producto === p.id);
+                                return !yaSeleccionado;
+                              })
+                              .map(p => (
+                                <option key={p.id} value={p.id}>
+                                  {p.nombre} - {p.categoria_nombre || "Sin categoría"} - ${p.costo_compra}
+                                </option>
+                              ))}
                           </select>
                           
                           <div className="grid grid-cols-2 gap-3">
