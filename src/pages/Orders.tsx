@@ -37,7 +37,7 @@ import {
   Alert,
   ConfirmDialog
 } from "../components/ui";
-import { Plus, Send, Check, X, Package, Trash2, Calendar, MapPin, FileDown, Edit, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Send, Check, X, Package, Trash2, Calendar, MapPin, FileDown, Edit, ChevronDown, ChevronUp, Filter, List, Search } from "lucide-react";
 import clsx from 'clsx';
 
 type PedidoItemForm = {
@@ -95,6 +95,18 @@ export default function Orders() {
 
   // Estado para expandir/colapsar lista de productos
   const [expandedPedidos, setExpandedPedidos] = useState<Set<number>>(new Set());
+
+  // Estados para vista paginada y filtros
+  const [vistaCompleta, setVistaCompleta] = useState(false);
+  const [filtroFechaDesde, setFiltroFechaDesde] = useState<string>("");
+  const [filtroFechaHasta, setFiltroFechaHasta] = useState<string>("");
+  const [filtroProducto, setFiltroProducto] = useState<number | null>(null);
+  const [filtroEstado, setFiltroEstado] = useState<string>("");
+  const [filtroSucursal, setFiltroSucursal] = useState<number | null>(null);
+  const [filtroOrigenTipo, setFiltroOrigenTipo] = useState<string>("");
+
+  // Estado para secciones colapsadas
+  const [seccionesColapsadas, setSeccionesColapsadas] = useState<Set<string>>(new Set());
 
   const session = tokenStorage.getSession();
   const isAdmin = session?.rol === "admin";
@@ -642,11 +654,63 @@ export default function Orders() {
     : (["aprobado", "borrador", "pendiente", "recibido", "rechazado"] as const);
   
   const pedidosPorEstado = {
-    aprobado: pedidos.filter(p => p.estado === "aprobado"),
+    aprobado: pedidos.filter(p => p.estado === "aprobado").sort((a, b) => 
+      new Date(b.fecha_creacion).getTime() - new Date(a.fecha_creacion).getTime()
+    ),
     borrador: pedidos.filter(p => p.estado === "borrador"),
     pendiente: pedidos.filter(p => p.estado === "pendiente"),
-    recibido: pedidos.filter(p => p.estado === "recibido"),
-    rechazado: pedidos.filter(p => p.estado === "rechazado")
+    recibido: pedidos.filter(p => p.estado === "recibido").sort((a, b) => 
+      new Date(b.fecha_creacion).getTime() - new Date(a.fecha_creacion).getTime()
+    ),
+    rechazado: pedidos.filter(p => p.estado === "rechazado").sort((a, b) => 
+      new Date(b.fecha_creacion).getTime() - new Date(a.fecha_creacion).getTime()
+    )
+  };
+
+  // Aplicar filtros si está en vista completa
+  const aplicarFiltros = (pedidosLista: Pedido[]) => {
+    let filtered = pedidosLista;
+    
+    if (filtroFechaDesde) {
+      filtered = filtered.filter(p => new Date(p.fecha_creacion) >= new Date(filtroFechaDesde));
+    }
+    
+    if (filtroFechaHasta) {
+      filtered = filtered.filter(p => new Date(p.fecha_creacion) <= new Date(filtroFechaHasta));
+    }
+    
+    if (filtroProducto) {
+      filtered = filtered.filter(p => p.items.some(item => item.producto === filtroProducto));
+    }
+    
+    if (filtroEstado) {
+      filtered = filtered.filter(p => p.estado === filtroEstado);
+    }
+    
+    if (filtroSucursal) {
+      filtered = filtered.filter(p => p.destino === filtroSucursal);
+    }
+    
+    if (filtroOrigenTipo) {
+      filtered = filtered.filter(p => p.origen_tipo === filtroOrigenTipo);
+    }
+    
+    return filtered;
+  };
+
+  // En modo compacto (vista por defecto)
+  const pedidosMostrar = !vistaCompleta ? {
+    aprobado: isAdmin ? pedidosPorEstado.aprobado.slice(0, 6) : pedidosPorEstado.aprobado,
+    borrador: pedidosPorEstado.borrador,
+    pendiente: pedidosPorEstado.pendiente,
+    recibido: pedidosPorEstado.recibido.slice(0, 6), // últimos 6
+    rechazado: pedidosPorEstado.rechazado.slice(0, 6) // últimos 6
+  } : {
+    aprobado: aplicarFiltros(pedidosPorEstado.aprobado),
+    borrador: aplicarFiltros(pedidosPorEstado.borrador),
+    pendiente: aplicarFiltros(pedidosPorEstado.pendiente),
+    recibido: aplicarFiltros(pedidosPorEstado.recibido),
+    rechazado: aplicarFiltros(pedidosPorEstado.rechazado)
   };
 
   const estadoLabels: Record<string, string> = {
@@ -672,10 +736,167 @@ export default function Orders() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-neutral-900">Pedidos</h1>
-        <p className="text-sm text-neutral-500 mt-1">Gestión de pedidos de mercadería</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-neutral-900">Pedidos</h1>
+          <p className="text-sm text-neutral-500 mt-1">Gestión de pedidos de mercadería</p>
+        </div>
+        
+        {/* Toggle vista completa */}
+        <Button 
+          variant={vistaCompleta ? "primary" : "ghost"}
+          onClick={() => {
+            setVistaCompleta(!vistaCompleta);
+            if (vistaCompleta) {
+              // Resetear filtros al volver a vista compacta
+              setFiltroFechaDesde("");
+              setFiltroFechaHasta("");
+              setFiltroProducto(null);
+              setFiltroEstado("");
+              setFiltroSucursal(null);
+              setFiltroOrigenTipo("");
+            }
+          }}
+        >
+          {vistaCompleta ? (
+            <>
+              <List className="h-4 w-4" />
+              Vista compacta
+            </>
+          ) : (
+            <>
+              <Filter className="h-4 w-4" />
+              Ver todos los pedidos
+            </>
+          )}
+        </Button>
       </div>
+
+      {/* Panel de filtros (en vista completa) */}
+      {vistaCompleta && (
+        <Card>
+          <CardBody>
+            <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-neutral-700">
+                  Estado
+                </label>
+                <select
+                  value={filtroEstado}
+                  onChange={(e) => setFiltroEstado(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                >
+                  <option value="">Todos los estados</option>
+                  <option value="borrador">Borrador</option>
+                  <option value="pendiente">Pendiente</option>
+                  <option value="aprobado">Aprobado</option>
+                  <option value="recibido">Recibido</option>
+                  <option value="rechazado">Rechazado</option>
+                </select>
+              </div>
+              
+              {isAdmin && (
+                <>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-neutral-700">
+                      Sucursal destino
+                    </label>
+                    <select
+                      value={filtroSucursal?.toString() ?? ""}
+                      onChange={(e) => setFiltroSucursal(e.target.value ? Number(e.target.value) : null)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                    >
+                      <option value="">Todas las sucursales</option>
+                      {sucursales.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.nombre} ({s.tipo})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-neutral-700">
+                      Origen
+                    </label>
+                    <select
+                      value={filtroOrigenTipo}
+                      onChange={(e) => setFiltroOrigenTipo(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                    >
+                      <option value="">Todos los orígenes</option>
+                      <option value="distribuidor">Proveedor/Distribuidor</option>
+                      <option value="sucursal">Sucursal/Almacén</option>
+                    </select>
+                  </div>
+                </>
+              )}
+              
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-neutral-700">
+                  Fecha desde
+                </label>
+                <input
+                  type="date"
+                  value={filtroFechaDesde}
+                  onChange={(e) => setFiltroFechaDesde(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-neutral-700">
+                  Fecha hasta
+                </label>
+                <input
+                  type="date"
+                  value={filtroFechaHasta}
+                  onChange={(e) => setFiltroFechaHasta(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-neutral-700">
+                  Producto
+                </label>
+                <select
+                  value={filtroProducto?.toString() ?? ""}
+                  onChange={(e) => setFiltroProducto(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                >
+                  <option value="">Todos los productos</option>
+                  {productos.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            {(filtroFechaDesde || filtroFechaHasta || filtroProducto || filtroEstado || filtroSucursal || filtroOrigenTipo) && (
+              <div className="mt-4 flex justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setFiltroFechaDesde("");
+                    setFiltroFechaHasta("");
+                    setFiltroProducto(null);
+                    setFiltroEstado("");
+                    setFiltroSucursal(null);
+                    setFiltroOrigenTipo("");
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                  Limpiar filtros
+                </Button>
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      )}
 
       {/* Alert de errores */}
       {err && <Alert variant="error">{err}</Alert>}
@@ -1044,21 +1265,58 @@ export default function Orders() {
 
       {/* Listado por estados - orden personalizado */}
       {ordenEstados.map(estado => {
-        const pedidosEstado = pedidosPorEstado[estado];
+        const pedidosEstado = pedidosMostrar[estado];
         if (pedidosEstado.length === 0) return null;
+        
+        // Calcular cuántos quedan sin mostrar en vista compacta
+        const totalEstado = pedidosPorEstado[estado].length;
+        const mostrandoEstado = pedidosEstado.length;
+        const ocultosEstado = totalEstado - mostrandoEstado;
+        
+        const estaColapsada = seccionesColapsadas.has(estado);
         
         return (
           <div key={estado} className="space-y-3">
             <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold text-neutral-900">
-                {estadoLabels[estado as keyof typeof estadoLabels]}
-              </h2>
-              <Badge variant={estadoBadgeVariant[estado as keyof typeof estadoBadgeVariant]} dot>
-                {pedidosEstado.length}
-              </Badge>
+              <button
+                onClick={() => {
+                  setSeccionesColapsadas(prev => {
+                    const next = new Set(prev);
+                    if (next.has(estado)) {
+                      next.delete(estado);
+                    } else {
+                      next.add(estado);
+                    }
+                    return next;
+                  });
+                }}
+                className="flex items-center gap-3 hover:opacity-70 transition-opacity"
+              >
+                {estaColapsada ? (
+                  <ChevronDown className="h-5 w-5 text-neutral-400" />
+                ) : (
+                  <ChevronUp className="h-5 w-5 text-neutral-400" />
+                )}
+                <h2 className="text-lg font-semibold text-neutral-900">
+                  {estadoLabels[estado as keyof typeof estadoLabels]}
+                </h2>
+                <Badge variant={estadoBadgeVariant[estado as keyof typeof estadoBadgeVariant]} dot>
+                  {totalEstado}
+                </Badge>
+              </button>
+              
+              {ocultosEstado > 0 && !vistaCompleta && (
+                <button
+                  onClick={() => setVistaCompleta(true)}
+                  className="text-xs text-primary-600 hover:text-primary-700 hover:underline transition-colors"
+                >
+                  (mostrando {mostrandoEstado} de {totalEstado})
+                </button>
+              )}
             </div>
             
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {!estaColapsada && (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {pedidosEstado.map((pedido) => (
                 <Card key={pedido.id} className="hover:shadow-soft-lg transition-shadow">
                   <CardHeader>
@@ -1235,6 +1493,7 @@ export default function Orders() {
                 </Card>
               ))}
             </div>
+            )}
           </div>
         );
       })}
@@ -1244,6 +1503,31 @@ export default function Orders() {
           <CardBody className="text-center py-12">
             <Package className="h-16 w-16 text-neutral-300 mx-auto mb-4" />
             <p className="text-neutral-500">No hay pedidos registrados</p>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* Mensaje cuando los filtros no devuelven resultados */}
+      {pedidos.length > 0 && vistaCompleta && 
+       Object.values(pedidosMostrar).every(arr => arr.length === 0) && (
+        <Card>
+          <CardBody className="text-center py-12">
+            <Search className="h-16 w-16 text-neutral-300 mx-auto mb-4" />
+            <p className="text-neutral-500 mb-2">No se encontraron pedidos con los filtros aplicados</p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setFiltroFechaDesde("");
+                setFiltroFechaHasta("");
+                setFiltroProducto(null);
+                setFiltroEstado("");
+                setFiltroSucursal(null);
+                setFiltroOrigenTipo("");
+              }}
+            >
+              Limpiar filtros
+            </Button>
           </CardBody>
         </Card>
       )}
