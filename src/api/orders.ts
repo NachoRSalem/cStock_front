@@ -50,7 +50,8 @@ export type PedidoRecibirBody = {
 
 export type PedidoAprobarItem = {
   id: number;
-  sub_ubicacion_origen: number;
+  sub_ubicacion_origen?: number; // legacy - single sub-ubicación
+  sub_ubicaciones_origen?: { sub_ubicacion: number; cantidad: number; }[]; // new - multiple sub-ubicaciones
 };
 
 export type PedidoAprobarBody = {
