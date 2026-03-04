@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { listVentas, type VentaDetalle } from "../api/sales";
+import { listVentas, type VentaDetalle, type VentasPaginadas } from "../api/sales";
 import { tokenStorage } from "../utils/storage";
 import {
   Card,
@@ -15,6 +15,7 @@ import {
   TableRow,
   TableHead,
   TableCell,
+  Button,
 } from "../components/ui";
 import {
   ShoppingCart,
@@ -25,7 +26,9 @@ import {
   ChevronDown,
   ChevronRight,
   Receipt,
+  ChevronLeft,
 } from "lucide-react";
+import clsx from "clsx";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -128,6 +131,12 @@ function VentaRow({ venta }: { venta: VentaDetalle }) {
 
 export default function SucursalSalesView() {
   const [ventas, setVentas]   = useState<VentaDetalle[]>([]);
+  const [paginacion, setPaginacion] = useState<{ count: number; next: string | null; previous: string | null }>({
+    count: 0,
+    next: null,
+    previous: null,
+  });
+  const [paginaActual, setPaginaActual] = useState(1);
   const [err, setErr]         = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -138,8 +147,9 @@ export default function SucursalSalesView() {
       setErr(null);
       setLoading(true);
       try {
-        const data = await listVentas({ sucursal: sucursalId ?? undefined });
-        setVentas(data);
+        const data = await listVentas({ sucursal: sucursalId ?? undefined, page: paginaActual });
+        setVentas(data.results);
+        setPaginacion({ count: data.count, next: data.next, previous: data.previous });
       } catch (e: any) {
         setErr(e?.message ?? "Error cargando ventas");
       } finally {
@@ -147,12 +157,13 @@ export default function SucursalSalesView() {
       }
     }
     load();
-  }, [sucursalId]);
+  }, [sucursalId, paginaActual]);
 
   if (loading) return <PageLoader message="Cargando ventas..." />;
 
   const totalRev   = ventas.reduce((s, v) => s + parseFloat(v.total), 0);
   const avgTicket  = ventas.length > 0 ? totalRev / ventas.length : 0;
+  const totalPaginas = Math.ceil(paginacion.count / 10);
 
   return (
     <div className="space-y-6">
@@ -174,7 +185,7 @@ export default function SucursalSalesView() {
             </div>
             <div>
               <div className="text-sm text-neutral-500">Total ventas</div>
-              <div className="text-3xl font-bold text-neutral-900">{ventas.length}</div>
+              <div className="text-3xl font-bold text-neutral-900">{paginacion.count}</div>
             </div>
           </CardBody>
         </Card>
@@ -184,7 +195,7 @@ export default function SucursalSalesView() {
               <DollarSign className="h-6 w-6 text-emerald-600" />
             </div>
             <div>
-              <div className="text-sm text-neutral-500">Ingresos totales</div>
+              <div className="text-sm text-neutral-500">Ingresos (página actual)</div>
               <div className="text-3xl font-bold text-neutral-900">{fmtMoney(totalRev)}</div>
             </div>
           </CardBody>
@@ -203,7 +214,7 @@ export default function SucursalSalesView() {
       </div>
 
       {/* ventas table */}
-      {ventas.length === 0 ? (
+      {paginacion.count === 0 ? (
         <Card>
           <CardBody className="text-center py-12">
             <ShoppingCart className="h-16 w-16 text-neutral-300 mx-auto mb-4" />
@@ -233,6 +244,67 @@ export default function SucursalSalesView() {
               </TableBody>
             </Table>
           </div>
+
+          {/* Paginación */}
+          {totalPaginas > 1 && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-neutral-200">
+              <div className="text-sm text-neutral-600">
+                Mostrando <span className="font-medium">{ventas.length}</span> de{" "}
+                <span className="font-medium">{paginacion.count}</span> ventas
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
+                  disabled={!paginacion.previous}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Anterior
+                </Button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPaginas) }, (_, i) => {
+                    let pageNum: number;
+                    if (totalPaginas <= 5) {
+                      pageNum = i + 1;
+                    } else if (paginaActual <= 3) {
+                      pageNum = i + 1;
+                    } else if (paginaActual >= totalPaginas - 2) {
+                      pageNum = totalPaginas - 4 + i;
+                    } else {
+                      pageNum = paginaActual - 2 + i;
+                    }
+
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setPaginaActual(pageNum)}
+                        className={clsx(
+                          "w-8 h-8 rounded-lg text-sm font-medium transition-colors",
+                          paginaActual === pageNum
+                            ? "bg-primary-500 text-white"
+                            : "text-neutral-600 hover:bg-neutral-100"
+                        )}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))}
+                  disabled={!paginacion.next}
+                >
+                  Siguiente
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       )}
     </div>

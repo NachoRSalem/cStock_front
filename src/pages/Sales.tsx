@@ -52,6 +52,9 @@ export default function Sales() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
+  // Modal de confirmación
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
   // Modal de recibo
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState<{ id: number; items: CartItem[]; total: number } | null>(null);
@@ -126,7 +129,7 @@ export default function Sales() {
 
   const totalVenta = cart.reduce((sum, item) => sum + (item.cantidad * item.precio_venta_momento), 0);
 
-  const handleSale = async () => {
+  const handleSale = () => {
     if (cart.length === 0) {
       setErr("Agregá al menos un producto al carrito");
       return;
@@ -137,8 +140,15 @@ export default function Sales() {
       return;
     }
 
+    // Mostrar modal de confirmación
+    setShowConfirmModal(true);
+  };
+
+  const confirmSale = async () => {
     setBusy(true);
     setErr(null);
+    setShowConfirmModal(false);
+    
     try {
       const items: VentaItemCreate[] = cart.map(item => ({
         producto: item.producto,
@@ -147,7 +157,7 @@ export default function Sales() {
         precio_venta_momento: item.precio_venta_momento.toString()
       }));
 
-      const result = await createVenta({ sucursal, items });
+      const result = await createVenta({ sucursal: sucursal!, items });
       
       // Mostrar recibo
       setReceiptData({
@@ -362,7 +372,7 @@ export default function Sales() {
                       className="w-full"
                     >
                       <DollarSign className="h-5 w-5" />
-                      {busy ? "Procesando..." : "Confirmar Venta"}
+                      {busy ? "Procesando..." : "Registrar Venta"}
                     </Button>
                   </div>
                 </>
@@ -371,6 +381,83 @@ export default function Sales() {
           </Card>
         </div>
       </div>
+
+      {/* Modal de confirmación */}
+      <Modal open={showConfirmModal} onClose={() => setShowConfirmModal(false)}>
+        <div className="p-6">
+          <div className="flex items-center justify-center mb-6">
+            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center">
+              <ShoppingCart className="h-10 w-10 text-amber-600" />
+            </div>
+          </div>
+
+          <h2 className="text-2xl font-bold text-center text-gray-900 mb-2">
+            Confirmar Venta
+          </h2>
+          <p className="text-center text-gray-600 mb-6">
+            Revisá los detalles antes de registrar la venta
+          </p>
+
+          {/* Detalle de items */}
+          <div className="bg-gray-50 rounded-lg p-4 mb-6 max-h-96 overflow-y-auto">
+            <h3 className="font-semibold text-gray-900 mb-3">Productos</h3>
+            <div className="space-y-3">
+              {cart.map((item, index) => (
+                <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{item.producto_nombre}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {item.sub_ubicacion_nombre}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1">
+                      {item.cantidad} × ${item.precio_venta_momento.toFixed(2)}
+                    </p>
+                  </div>
+                  <p className="font-bold text-gray-900 text-lg">
+                    ${(item.cantidad * item.precio_venta_momento).toFixed(2)}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-gray-300 mt-4 pt-4">
+              <div className="flex items-center justify-between">
+                <span className="text-lg font-bold text-gray-900">Total</span>
+                <span className="text-2xl font-bold text-emerald-600">
+                  ${totalVenta.toFixed(2)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {err && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-600">{err}</p>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowConfirmModal(false)}
+              className="flex-1"
+              disabled={busy}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="success"
+              onClick={confirmSale}
+              loading={busy}
+              disabled={busy}
+              className="flex-1"
+            >
+              <DollarSign className="h-5 w-5" />
+              Confirmar Venta
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Modal de recibo */}
       <Modal open={showReceipt} onClose={() => setShowReceipt(false)}>

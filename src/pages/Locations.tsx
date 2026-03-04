@@ -1,19 +1,95 @@
 import { useEffect, useState } from "react";
-import { listSucursales, type Sucursal } from "../api/locations";
-import { Card, CardBody, CardHeader, CardTitle, Badge, PageLoader, Alert } from "../components/ui";
-import { MapPin, Building2 } from "lucide-react";
+import { listSucursales, createSubUbicacion, type Sucursal, type SubUbicacionCreateBody } from "../api/locations";
+import { 
+  Card, 
+  CardBody, 
+  CardHeader, 
+  CardTitle, 
+  Badge, 
+  PageLoader, 
+  Alert, 
+  Button, 
+  Modal, 
+  ModalFooter, 
+  Input 
+} from "../components/ui";
+import { MapPin, Building2, Plus, CheckCircle, X } from "lucide-react";
 
 export default function Locations() {
   const [data, setData] = useState<Sucursal[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Estados para modal de agregar sub-ubicación
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedSucursal, setSelectedSucursal] = useState<Sucursal | null>(null);
+  const [newSubUbicacion, setNewSubUbicacion] = useState<{ nombre: string; tipo: "heladera" | "freezer" | "ambiente" }>({
+    nombre: "",
+    tipo: "ambiente"
+  });
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    listSucursales()
-      .then(setData)
-      .catch((e) => setErr(e?.message ?? "Error"))
-      .finally(() => setLoading(false));
+    loadData();
   }, []);
+
+  async function loadData() {
+    setLoading(true);
+    try {
+      const sucursales = await listSucursales();
+      setData(sucursales);
+    } catch (e: any) {
+      setErr(e?.message ?? "Error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleOpenAddModal = (sucursal: Sucursal) => {
+    setSelectedSucursal(sucursal);
+    setNewSubUbicacion({ nombre: "", tipo: "ambiente" });
+    setErr(null);
+    setShowAddModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowAddModal(false);
+    setSelectedSucursal(null);
+    setNewSubUbicacion({ nombre: "", tipo: "ambiente" });
+    setErr(null);
+  };
+
+  const handleCreateSubUbicacion = async () => {
+    if (!selectedSucursal) return;
+    
+    if (!newSubUbicacion.nombre.trim()) {
+      setErr("El nombre es requerido");
+      return;
+    }
+
+    setBusy(true);
+    setErr(null);
+    
+    try {
+      const body: SubUbicacionCreateBody = {
+        ubicacion: selectedSucursal.id,
+        nombre: newSubUbicacion.nombre.trim(),
+        tipo: newSubUbicacion.tipo
+      };
+      
+      await createSubUbicacion(body);
+      
+      // Recargar datos
+      await loadData();
+      
+      // Cerrar modal
+      handleCloseModal();
+    } catch (e: any) {
+      setErr(e?.message ?? "Error al crear sub-ubicación");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   if (loading) return <PageLoader />;
 
@@ -53,9 +129,19 @@ export default function Locations() {
             <CardBody className="pt-4">
               {s.sub_ubicaciones?.length ? (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-neutral-700 mb-3">
-                    Sub-ubicaciones ({s.sub_ubicaciones.length})
-                  </p>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-medium text-neutral-700">
+                      Sub-ubicaciones ({s.sub_ubicaciones.length})
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleOpenAddModal(s)}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Agregar
+                    </Button>
+                  </div>
                   <div className="space-y-2">
                     {s.sub_ubicaciones.map((u) => (
                       <div
@@ -78,7 +164,15 @@ export default function Locations() {
               ) : (
                 <div className="text-center py-8">
                   <MapPin className="h-8 w-8 text-neutral-300 mx-auto mb-2" />
-                  <p className="text-sm text-neutral-500">Sin sub-ubicaciones</p>
+                  <p className="text-sm text-neutral-500 mb-3">Sin sub-ubicaciones</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleOpenAddModal(s)}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Agregar sub-ubicación
+                  </Button>
                 </div>
               )}
             </CardBody>
@@ -94,6 +188,80 @@ export default function Locations() {
           </CardBody>
         </Card>
       )}
+
+      {/* Modal para agregar sub-ubicación */}
+      <Modal open={showAddModal} onClose={handleCloseModal}>
+        <div className="p-6">
+          <div className="flex items-center justify-center mb-6">
+            <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center">
+              <MapPin className="h-10 w-10 text-primary-600" />
+            </div>
+          </div>
+
+          <h3 className="text-xl font-bold text-center mb-2 text-neutral-900">
+            Agregar Sub-ubicación
+          </h3>
+          <p className="text-center text-neutral-600 mb-6">
+            {selectedSucursal?.nombre}
+          </p>
+
+          {err && (
+            <Alert variant="error" className="mb-4">
+              {err}
+            </Alert>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-2">
+                Nombre <span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="text"
+                placeholder="Ej: Góndola Central"
+                value={newSubUbicacion.nombre}
+                onChange={(e) => setNewSubUbicacion({ ...newSubUbicacion, nombre: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newSubUbicacion.nombre.trim()) {
+                    handleCreateSubUbicacion();
+                  }
+                }}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-2">
+                Tipo <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={newSubUbicacion.tipo}
+                onChange={(e) => setNewSubUbicacion({ ...newSubUbicacion, tipo: e.target.value as "heladera" | "freezer" | "ambiente" })}
+                className="w-full px-3 py-2 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+              >
+                <option value="ambiente">Ambiente</option>
+                <option value="heladera">Heladera</option>
+                <option value="freezer">Freezer</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <ModalFooter>
+          <Button variant="ghost" onClick={handleCloseModal} disabled={busy}>
+            <X className="h-4 w-4" />
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleCreateSubUbicacion}
+            disabled={!newSubUbicacion.nombre.trim() || busy}
+            loading={busy}
+          >
+            <CheckCircle className="h-4 w-4" />
+            Crear Sub-ubicación
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   );
 }

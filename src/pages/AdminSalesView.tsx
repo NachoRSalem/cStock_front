@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { listVentas, type VentaDetalle } from "../api/sales";
+import { listVentas, type VentaDetalle, type VentasPaginadas } from "../api/sales";
 import { listSucursales, type Sucursal } from "../api/locations";
 import {
   Card,
@@ -26,6 +26,7 @@ import {
   User,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   ArrowLeft,
   Receipt,
 } from "lucide-react";
@@ -128,14 +129,24 @@ export default function AdminSalesView() {
   const [err, setErr]                 = useState<string | null>(null);
   const [loading, setLoading]         = useState(true);
   const [selected, setSelected]       = useState<SelectedSucursal | null>(null);
+  
+  // Estados de paginación para vista detallada
+  const [ventasDetalle, setVentasDetalle] = useState<VentaDetalle[]>([]);
+  const [paginacion, setPaginacion] = useState<{ count: number; next: string | null; previous: string | null }>({
+    count: 0,
+    next: null,
+    previous: null,
+  });
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [loadingDetalle, setLoadingDetalle] = useState(false);
 
   useEffect(() => {
     async function load() {
       setErr(null);
       setLoading(true);
       try {
-        const [ventasData, sucData] = await Promise.all([listVentas(), listSucursales()]);
-        setAllVentas(ventasData);
+        const [ventasData, sucData] = await Promise.all([listVentas({ page: 1 }), listSucursales()]);
+        setAllVentas(ventasData.results);
         setSucursales(sucData);
       } catch (e: any) {
         setErr(e?.message ?? "Error cargando datos");
@@ -146,17 +157,39 @@ export default function AdminSalesView() {
     load();
   }, []);
 
+  // Cargar ventas paginadas cuando se selecciona una sucursal
+  useEffect(() => {
+    if (!selected) return;
+    
+    async function loadDetalle() {
+      setLoadingDetalle(true);
+      try {
+        const data = await listVentas({ sucursal: selected.id, page: paginaActual });
+        setVentasDetalle(data.results);
+        setPaginacion({ count: data.count, next: data.next, previous: data.previous });
+      } catch (e: any) {
+        setErr(e?.message ?? "Error cargando ventas");
+      } finally {
+        setLoadingDetalle(false);
+      }
+    }
+    loadDetalle();
+  }, [selected, paginaActual]);
+
   if (loading) return <PageLoader message="Cargando ventas..." />;
 
   // ── DETAIL VIEW ────────────────────────────────────────────────────────────
   if (selected) {
-    const ventas     = allVentas.filter((v) => v.sucursal === selected.id);
-    const totalRev   = ventas.reduce((s, v) => s + parseFloat(v.total), 0);
+    const totalRev = ventasDetalle.reduce((s, v) => s + parseFloat(v.total), 0);
+    const totalPaginas = Math.ceil(paginacion.count / 10);
 
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setSelected(null)}>
+          <Button variant="ghost" size="sm" onClick={() => {
+            setSelected(null);
+            setPaginaActual(1);
+          }}>
             <ArrowLeft className="h-4 w-4" />
             Volver
           </Button>
@@ -176,7 +209,7 @@ export default function AdminSalesView() {
               </div>
               <div>
                 <div className="text-sm text-neutral-500">Ventas totales</div>
-                <div className="text-3xl font-bold text-neutral-900">{ventas.length}</div>
+                <div className="text-3xl font-bold text-neutral-900">{paginacion.count}</div>
               </div>
             </CardBody>
           </Card>
@@ -186,14 +219,21 @@ export default function AdminSalesView() {
                 <DollarSign className="h-6 w-6 text-emerald-600" />
               </div>
               <div>
-                <div className="text-sm text-neutral-500">Ingresos totales</div>
+                <div className="text-sm text-neutral-500">Ingresos (página actual)</div>
                 <div className="text-3xl font-bold text-neutral-900">{fmtMoney(totalRev)}</div>
               </div>
             </CardBody>
           </Card>
         </div>
 
-        {ventas.length === 0 ? (
+        {loadingDetalle ? (
+          <Card>
+            <CardBody className="text-center py-12">
+              <div className="animate-spin h-8 w-8 border-4 border-primary-500 border-t-transparent rounded-full mx-auto"></div>
+              <p className="text-neutral-500 mt-4">Cargando ventas...</p>
+            </CardBody>
+          </Card>
+        ) : paginacion.count === 0 ? (
           <Card>
             <CardBody className="text-center py-12">
               <ShoppingCart className="h-16 w-16 text-neutral-300 mx-auto mb-4" />
@@ -217,12 +257,73 @@ export default function AdminSalesView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {ventas.map((v) => (
+                  {ventasDetalle.map((v) => (
                     <VentaRow key={v.id} venta={v} />
                   ))}
                 </TableBody>
               </Table>
             </div>
+
+            {/* Paginación */}
+            {totalPaginas > 1 && (
+              <div className="flex items-center justify-between px-6 py-4 border-t border-neutral-200">
+                <div className="text-sm text-neutral-600">
+                  Mostrando <span className="font-medium">{ventasDetalle.length}</span> de{" "}
+                  <span className="font-medium">{paginacion.count}</span> ventas
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
+                    disabled={!paginacion.previous}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </Button>
+                  
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPaginas) }, (_, i) => {
+                      let pageNum: number;
+                      if (totalPaginas <= 5) {
+                        pageNum = i + 1;
+                      } else if (paginaActual <= 3) {
+                        pageNum = i + 1;
+                      } else if (paginaActual >= totalPaginas - 2) {
+                        pageNum = totalPaginas - 4 + i;
+                      } else {
+                        pageNum = paginaActual - 2 + i;
+                      }
+
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setPaginaActual(pageNum)}
+                          className={clsx(
+                            "w-8 h-8 rounded-lg text-sm font-medium transition-colors",
+                            paginaActual === pageNum
+                              ? "bg-emerald-500 text-white"
+                              : "text-neutral-600 hover:bg-neutral-100"
+                          )}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))}
+                    disabled={!paginacion.next}
+                  >
+                    Siguiente
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         )}
       </div>
