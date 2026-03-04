@@ -11,8 +11,10 @@ import {
   getPedido,
   updatePedido,
   deletePedido,
+  getDisponibilidadSucursales,
   type Pedido, 
   type PedidoItemCreate,
+  type DisponibilidadSucursal,
 } from "../api/orders";
 import { listProductos, type Producto } from "../api/products";
 import { listSucursales, type Sucursal, type SubUbicacion } from "../api/locations";
@@ -35,7 +37,7 @@ import {
   Alert,
   ConfirmDialog
 } from "../components/ui";
-import { Plus, Send, Check, X, Package, Trash2, Calendar, MapPin, FileDown, Edit } from "lucide-react";
+import { Plus, Send, Check, X, Package, Trash2, Calendar, MapPin, FileDown, Edit, ChevronDown, ChevronUp } from "lucide-react";
 import clsx from 'clsx';
 
 type PedidoItemForm = {
@@ -56,6 +58,8 @@ export default function Orders() {
   const [showCreate, setShowCreate] = useState(false);
   const [destino, setDestino] = useState<number | null>(null);
   const [items, setItems] = useState<PedidoItemForm[]>([]);
+  const [origenTipoCreate, setOrigenTipoCreate] = useState<'distribuidor' | 'sucursal'>('distribuidor');
+  const [origenSucursalCreate, setOrigenSucursalCreate] = useState<number | null>(null);
 
   // Estados para el modal de recibir pedido
   const [showReceiveModal, setShowReceiveModal] = useState(false);
@@ -73,14 +77,24 @@ export default function Orders() {
   // Estados para aprobación con selección de almacén
   const [showAprobarOrigenModal, setShowAprobarOrigenModal] = useState(false);
   const [showAprobarAlmacenModal, setShowAprobarAlmacenModal] = useState(false);
+  const [showAprobarSucursalModal, setShowAprobarSucursalModal] = useState(false);
   const [pedidoToApprove, setPedidoToApprove] = useState<Pedido | null>(null);
   const [almacenUbicaciones, setAlmacenUbicaciones] = useState<Record<number, number>>({}); // pedidoitem_id -> sub_ubicacion_id
   const [almacenesDisponibles, setAlmacenesDisponibles] = useState<Sucursal[]>([]); // ubicaciones tipo almacen
   const [almacenStock, setAlmacenStock] = useState<StockItem[]>([]); // stock actual del almacén
+  
+  // Estados para aprobación desde sucursal
+  const [disponibilidadSucursales, setDisponibilidadSucursales] = useState<DisponibilidadSucursal[]>([]);
+  const [sucursalOrigenSeleccionada, setSucursalOrigenSeleccionada] = useState<number | null>(null);
+  const [sucursalOrigenStock, setSucursalOrigenStock] = useState<StockItem[]>([]);
+  const [sucursalUbicaciones, setSucursalUbicaciones] = useState<Record<number, number>>({});
 
   // Estados para edición de pedido
   const [showEdit, setShowEdit] = useState(false);
   const [pedidoToEdit, setPedidoToEdit] = useState<Pedido | null>(null);
+
+  // Estado para expandir/colapsar lista de productos
+  const [expandedPedidos, setExpandedPedidos] = useState<Set<number>>(new Set());
 
   const session = tokenStorage.getSession();
   const isAdmin = session?.rol === "admin";
@@ -201,7 +215,12 @@ export default function Orders() {
         };
       });
 
-      const pedidoCreado = await createPedido({ destino, items: itemsToSend });
+      const pedidoCreado = await createPedido({ 
+        destino, 
+        items: itemsToSend,
+        origen_tipo: origenTipoCreate,
+        origen_sucursal: origenTipoCreate === 'sucursal' ? origenSucursalCreate ?? undefined : undefined
+      });
       await loadData();
       
       // Si es admin, generar y descargar PDF automáticamente
@@ -222,6 +241,8 @@ export default function Orders() {
       setShowCreate(false);
       setItems([]);
       setDestino(isAdmin ? null : session?.sucursal ?? null);
+      setOrigenTipoCreate('distribuidor');
+      setOrigenSucursalCreate(null);
     } catch (e: any) {
       setErr(e?.message ?? "Error creando pedido");
     } finally {
@@ -382,7 +403,46 @@ export default function Orders() {
     }
   }
 
-  async function handleAprobarExterno() {
+  async function handleAprobarDesdeSucursal() {
+    // Usuario elige proveer desde otra sucursal
+    setShowAprobarOrigenModal(false);
+    if (!pedidoToApprove) return;
+    
+    try {
+      setBusy(true);
+      // Cargar disponibilidad de sucursales para este pedido
+      const disponibilidad = await getDisponibilidadSucursales(pedidoToApprove.id);
+      setDisponibilidadSucursales(disponibilidad);
+      
+      // Cargar el pedido completo
+      const pedidoCompleto = await getPedido(pedidoToApprove.id);
+      setPedidoToApprove(pedidoCompleto);
+      
+      setSucursalOrigenSeleccionada(null);
+      setSucursalUbicaciones({});
+      setShowAprobarSucursalModal(true);
+    } catch (e: any) {
+      setErr(e?.message ?? "Error cargando disponibilidad");
+      setShowAprobarOrigenModal(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSucursalOrigenChange(sucursalId: number) {
+    setSucursalOrigenSeleccionada(sucursalId);
+    setSucursalUbicaciones({});
+    
+    try {
+      // Cargar el stock de la sucursal seleccionada
+      const stock = await listStock({ ubicacion: sucursalId });
+      setSucursalOrigenStock(stock);
+    } catch (e: any) {
+      setErr(e?.message ?? "Error cargando stock de sucursal");
+    }
+  }
+
+  async function handleAprobarExtern() {
     // Usuario elige proveer externamente (distribuidor)
     setShowAprobarOrigenModal(false);
     if (!pedidoToApprove) return;
@@ -390,7 +450,7 @@ export default function Orders() {
     setBusy(true);
     setErr(null);
     try {
-      await aprobarPedido(pedidoToApprove.id, { provisto_desde_almacen: false });
+      await aprobarPedido(pedidoToApprove.id, { origen_tipo: 'distribuidor' });
       await loadData();
       
       // Generar y descargar PDF automáticamente
@@ -423,6 +483,13 @@ export default function Orders() {
       return;
     }
     
+    // Elegir cualquier almacén disponible (asumimos que es el mismo para todos)
+    const primerAlmacen = almacenesDisponibles[0];
+    if (!primerAlmacen) {
+      setErr("No se encontró el almacén");
+      return;
+    }
+    
     setBusy(true);
     setErr(null);
     setShowAprobarAlmacenModal(false);
@@ -433,32 +500,56 @@ export default function Orders() {
       }));
       
       await aprobarPedido(pedidoToApprove.id, {
-        provisto_desde_almacen: true,
+        origen_tipo: 'sucursal',
+        origen_sucursal: primerAlmacen.id,
         items
       });
       
       await loadData();
-      
-      // Generar y descargar PDF automáticamente
-      try {
-        const pedidoCompleto = await getPedido(pedidoToApprove.id);
-        const sucursalNombre = sucursales.find(s => s.id === pedidoCompleto.destino)?.nombre;
-        const { blob, fileName } = generarOrdenCompraPDF({ 
-          pedido: pedidoCompleto, 
-          sucursalDestino: sucursalNombre 
-        });
-        descargarPDF(blob, fileName);
-      } catch (pdfError) {
-        console.error('Error generando PDF:', pdfError);
-      }
     } catch (e: any) {
-      setErr(e?.message ?? "Error aprobando pedido desde almacén");
+      setErr(e?.message ?? "Error aprobando pedido");
+      setShowAprobarAlmacenModal(true);
     } finally {
       setBusy(false);
       setPedidoToApprove(null);
       setAlmacenUbicaciones({});
-      setAlmacenesDisponibles([]);
-      setAlmacenStock([]);
+    }
+  }
+
+  async function confirmAprobarDesdeSucursal() {
+    if (!pedidoToApprove || !sucursalOrigenSeleccionada) return;
+    
+    // Validar que todos los items tengan sub_ubicacion_origen asignada
+    const itemsSinUbicacion = pedidoToApprove.items.filter(item => !sucursalUbicaciones[item.id]);
+    if (itemsSinUbicacion.length > 0) {
+      setErr("Debes asignar una sub-ubicación de origen para todos los productos");
+      return;
+    }
+    
+    setBusy(true);
+    setErr(null);
+    setShowAprobarSucursalModal(false);
+    try {
+      const items = pedidoToApprove.items.map(item => ({
+        id: item.id,
+        sub_ubicacion_origen: sucursalUbicaciones[item.id]
+      }));
+      
+      await aprobarPedido(pedidoToApprove.id, {
+        origen_tipo: 'sucursal',
+        origen_sucursal: sucursalOrigenSeleccionada,
+        items
+      });
+      
+      await loadData();
+    } catch (e: any) {
+      setErr(e?.message ?? "Error aprobando pedido");
+      setShowAprobarSucursalModal(true);
+    } finally {
+      setBusy(false);
+      setPedidoToApprove(null);
+      setSucursalUbicaciones({});
+      setSucursalOrigenSeleccionada(null);
     }
   }
 
@@ -644,6 +735,53 @@ export default function Orders() {
                 </select>
               )}
             </div>
+
+            {/* Origen (solo admin) */}
+            {isAdmin && (
+              <>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-neutral-700">
+                    Origen del pedido
+                  </label>
+                  <select 
+                    value={origenTipoCreate} 
+                    onChange={(e) => {
+                      setOrigenTipoCreate(e.target.value as 'distribuidor' | 'sucursal');
+                      setOrigenSucursalCreate(null);
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                  >
+                    <option value="distribuidor">Distribuidor / Proveedor externo</option>
+                    <option value="sucursal">Otra sucursal / Almacén</option>
+                  </select>
+                </div>
+
+                {origenTipoCreate === 'sucursal' && (
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-neutral-700">
+                      Sucursal origen
+                    </label>
+                    <select 
+                      value={origenSucursalCreate?.toString() ?? ""} 
+                      onChange={(e) => setOrigenSucursalCreate(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                    >
+                      <option value="">Seleccionar sucursal origen...</option>
+                      {sucursales.filter(s => s.id !== destino).map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.nombre} ({s.tipo})
+                        </option>
+                      ))}
+                    </select>
+                    {!origenSucursalCreate && (
+                      <p className="text-xs text-amber-600">
+                        Nota: La asignación de sub-ubicaciones se hará al aprobar el pedido
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
 
             {/* Productos */}
             <div className="space-y-3">
@@ -945,9 +1083,12 @@ export default function Orders() {
                         <Badge variant={estadoBadgeVariant[pedido.estado as keyof typeof estadoBadgeVariant]}>
                           {estadoLabels[pedido.estado as keyof typeof estadoLabels]}
                         </Badge>
-                        {pedido.provisto_desde_almacen && (pedido.estado === 'aprobado' || pedido.estado === 'recibido') && (
-                          <Badge variant="pending" title="Provisto desde el almacén propio">
-                            Almacén
+                        {pedido.origen_tipo && (pedido.estado === 'aprobado' || pedido.estado === 'recibido') && (
+                          <Badge 
+                            variant={pedido.origen_tipo === 'distribuidor' ? 'info' : 'pending'} 
+                            title={pedido.origen_tipo === 'distribuidor' ? 'Provisto por proveedor externo' : `Provisto desde ${pedido.origen_sucursal_nombre}`}
+                          >
+                            {pedido.origen_tipo === 'distribuidor' ? 'Proveedor' : pedido.origen_sucursal_nombre}
                           </Badge>
                         )}
                       </div>
@@ -969,7 +1110,7 @@ export default function Orders() {
                     <div className="space-y-2">
                       <div className="text-xs font-medium text-neutral-700">Productos:</div>
                       <div className="space-y-1.5">
-                        {pedido.items.slice(0, 2).map(item => (
+                        {(expandedPedidos.has(pedido.id) ? pedido.items : pedido.items.slice(0, 2)).map(item => (
                           <div key={item.id} className="flex justify-between text-xs text-neutral-600 bg-neutral-50 px-2 py-1.5 rounded">
                             <span className="truncate">{item.producto_nombre}</span>
                             <span className="font-medium whitespace-nowrap ml-2">
@@ -978,9 +1119,32 @@ export default function Orders() {
                           </div>
                         ))}
                         {pedido.items.length > 2 && (
-                          <div className="text-xs text-neutral-400 px-2">
-                            +{pedido.items.length - 2} más...
-                          </div>
+                          <button
+                            onClick={() => {
+                              setExpandedPedidos(prev => {
+                                const next = new Set(prev);
+                                if (next.has(pedido.id)) {
+                                  next.delete(pedido.id);
+                                } else {
+                                  next.add(pedido.id);
+                                }
+                                return next;
+                              });
+                            }}
+                            className="flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700 px-2 py-1 transition-colors"
+                          >
+                            {expandedPedidos.has(pedido.id) ? (
+                              <>
+                                <ChevronUp className="h-3 w-3" />
+                                <span>Ver menos</span>
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown className="h-3 w-3" />
+                                <span>+{pedido.items.length - 2} más...</span>
+                              </>
+                            )}
+                          </button>
                         )}
                       </div>
                       
@@ -1084,7 +1248,7 @@ export default function Orders() {
         </Card>
       )}
 
-      {/* Modal: Elegir origen del pedido (almacén vs externo) */}
+      {/* Modal: Elegir origen del pedido (almacén vs sucursal vs externo) */}
       <Modal
         open={showAprobarOrigenModal}
         onClose={() => {
@@ -1097,21 +1261,21 @@ export default function Orders() {
       >
         <div className="space-y-3 py-2">
           <button
-            onClick={handleAprobarDesdeAlmacen}
+            onClick={handleAprobarDesdeSucursal}
             disabled={busy}
-            className="w-full flex items-start gap-4 p-4 border-2 border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors text-left"
+            className="w-full flex items-start gap-4 p-4 border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 rounded-xl transition-colors text-left"
           >
-            <div className="p-2 bg-emerald-100 rounded-lg mt-0.5">
-              <Package className="h-5 w-5 text-emerald-600" />
+            <div className="p-2 bg-amber-100 rounded-lg mt-0.5">
+              <MapPin className="h-5 w-5 text-amber-600" />
             </div>
             <div>
-              <div className="font-semibold text-emerald-800">Desde el almacén</div>
-              <div className="text-sm text-emerald-600">Se descuenta stock del almacén propio y se envía a la sucursal</div>
+              <div className="font-semibold text-amber-800">Desde otra sucursal</div>
+              <div className="text-sm text-amber-600">Se descuenta stock de otra sucursal que tenga disponibilidad</div>
             </div>
           </button>
 
           <button
-            onClick={handleAprobarExterno}
+            onClick={handleAprobarExtern}
             disabled={busy}
             className="w-full flex items-start gap-4 p-4 border-2 border-primary-300 bg-primary-50 hover:bg-primary-100 rounded-xl transition-colors text-left"
           >
@@ -1120,7 +1284,7 @@ export default function Orders() {
             </div>
             <div>
               <div className="font-semibold text-primary-800">Externo (distribuidor)</div>
-              <div className="text-sm text-primary-600">No afecta el stock del almacén, el pedido se gestiona con el proveedor</div>
+              <div className="text-sm text-primary-600">No afecta el stock, el pedido se gestiona con el proveedor externo</div>
             </div>
           </button>
         </div>
@@ -1235,6 +1399,149 @@ export default function Orders() {
               >
                 <Check className="h-4 w-4" />
                 Aprobar y descontar almacén
+              </Button>
+            </ModalFooter>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal: Seleccionar sucursal origen y sub-ubicaciones */}
+      <Modal
+        open={showAprobarSucursalModal}
+        onClose={() => {
+          setShowAprobarSucursalModal(false);
+          setPedidoToApprove(null);
+          setSucursalUbicaciones({});
+          setSucursalOrigenSeleccionada(null);
+          setDisponibilidadSucursales([]);
+          setSucursalOrigenStock([]);
+        }}
+        title="Asignar origen desde sucursal"
+        description="Elegí la sucursal origen y asigná las sub-ubicaciones para cada producto"
+        size="lg"
+      >
+        {pedidoToApprove && (
+          <div className="space-y-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <div className="text-sm font-medium text-amber-800">
+                Pedido #{pedidoToApprove.id} → {pedidoToApprove.destino_nombre}
+              </div>
+              <div className="text-xs text-amber-600 mt-0.5">
+                Seleccioná una sucursal que tenga stock disponible
+              </div>
+            </div>
+
+            {/* Selector de sucursal origen */}
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-2">
+                Sucursal origen
+              </label>
+              <select
+                value={sucursalOrigenSeleccionada ?? ""}
+                onChange={(e) => handleSucursalOrigenChange(Number(e.target.value))}
+                className="w-full px-3 py-2 rounded-xl border text-sm bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent border-neutral-300"
+              >
+                <option value="">Seleccionar sucursal...</option>
+                {disponibilidadSucursales.map(disp => (
+                  <option
+                    key={disp.sucursal_id}
+                    value={disp.sucursal_id}
+                    disabled={!disp.puede_completar}
+                  >
+                    {disp.sucursal_nombre} {disp.puede_completar ? '✓' : '(stock insuficiente)'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Si hay sucursal seleccionada, mostrar asignación por producto */}
+            {sucursalOrigenSeleccionada && (
+              <div className="space-y-3">
+                <div className="text-sm font-medium text-neutral-700">
+                  Asignar sub-ubicación para cada producto
+                </div>
+                {pedidoToApprove.items.map((item) => {
+                  const sucursalInfo = sucursales.find(s => s.id === sucursalOrigenSeleccionada);
+                  const stockPorSubUbicacion = Object.fromEntries(
+                    sucursalOrigenStock
+                      .filter(s => s.producto === item.producto)
+                      .map(s => [s.sub_ubicacion, s.cantidad])
+                  );
+                  const subUbicSelected = sucursalUbicaciones[item.id];
+                  const stockDisponible = subUbicSelected ? (stockPorSubUbicacion[subUbicSelected] ?? 0) : null;
+                  const stockInsuficiente = stockDisponible !== null && stockDisponible < item.cantidad;
+
+                  return (
+                    <div key={item.id} className="flex items-center gap-3 p-3 bg-white border border-neutral-200 rounded-lg">
+                      <div className="flex-1">
+                        <div className="font-medium text-sm text-neutral-900">{item.producto_nombre}</div>
+                        <div className="text-xs text-neutral-500">Cantidad pedida: {item.cantidad}</div>
+                        {stockInsuficiente && (
+                          <div className="text-xs text-red-600 font-medium mt-0.5">
+                            ⚠️ Stock insuficiente (disponible: {stockDisponible})
+                          </div>
+                        )}
+                        {stockDisponible !== null && !stockInsuficiente && (
+                          <div className="text-xs text-emerald-600 font-medium mt-0.5">
+                            ✓ Disponible: {stockDisponible} unidades
+                          </div>
+                        )}
+                      </div>
+                      <select
+                        value={sucursalUbicaciones[item.id] ?? ""}
+                        onChange={(e) => setSucursalUbicaciones(prev => ({
+                          ...prev,
+                          [item.id]: Number(e.target.value)
+                        }))}
+                        className={`px-3 py-2 rounded-xl border text-sm bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent ${
+                          stockInsuficiente ? 'border-red-400' : 'border-neutral-300'
+                        }`}
+                      >
+                        <option value="">Sub-ubicación...</option>
+                        {sucursalInfo?.sub_ubicaciones.map(sub => {
+                          const qty = stockPorSubUbicacion[sub.id] ?? 0;
+                          return (
+                            <option key={sub.id} value={sub.id}>
+                              {sub.nombre} ({sub.tipo}) — stock: {qty}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <ModalFooter>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setShowAprobarSucursalModal(false);
+                  setPedidoToApprove(null);
+                  setSucursalUbicaciones({});
+                  setSucursalOrigenSeleccionada(null);
+                  setDisponibilidadSucursales([]);
+                  setSucursalOrigenStock([]);
+                }}
+                disabled={busy}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="success"
+                onClick={confirmAprobarDesdeSucursal}
+                disabled={busy || !sucursalOrigenSeleccionada || pedidoToApprove.items.some(item => {
+                  if (!sucursalUbicaciones[item.id]) return true;
+                  const qty = sucursalOrigenStock.find(
+                    s => s.producto === item.producto && s.sub_ubicacion === sucursalUbicaciones[item.id]
+                  )?.cantidad ?? 0;
+                  return qty < item.cantidad;
+                })}
+                loading={busy}
+              >
+                <Check className="h-4 w-4" />
+                Aprobar y descontar sucursal
               </Button>
             </ModalFooter>
           </div>

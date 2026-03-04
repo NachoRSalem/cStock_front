@@ -1,6 +1,7 @@
 import { apiFetch } from "./http";
 
 export type PedidoEstado = "borrador" | "pendiente" | "aprobado" | "rechazado" | "recibido";
+export type OrigenTipo = "distribuidor" | "sucursal";
 
 export type PedidoItem = {
   id: number;
@@ -20,7 +21,9 @@ export type Pedido = {
   estado: PedidoEstado;
   fecha_creacion: string;
   items: PedidoItem[];
-  provisto_desde_almacen: boolean;
+  origen_tipo: OrigenTipo;
+  origen_sucursal: number | null;
+  origen_sucursal_nombre: string | null;
 };
 
 export type PedidoItemCreate = { 
@@ -31,7 +34,9 @@ export type PedidoItemCreate = {
 
 export type PedidoCreateBody = { 
   destino: number; 
-  items: PedidoItemCreate[] 
+  items: PedidoItemCreate[];
+  origen_tipo?: OrigenTipo;
+  origen_sucursal?: number;
 };
 
 export type PedidoRecibirItem = { 
@@ -49,7 +54,8 @@ export type PedidoAprobarItem = {
 };
 
 export type PedidoAprobarBody = {
-  provisto_desde_almacen: boolean;
+  origen_tipo: OrigenTipo;
+  origen_sucursal?: number;
   items?: PedidoAprobarItem[];
 };
 
@@ -65,11 +71,28 @@ export function enviarARevision(id: number) {
   return apiFetch<{ status: string }>(`/api/inventory/pedidos/${id}/enviar_a_revision/`, { method: "POST" });
 }
 
-export function aprobarPedido(id: number, body?: PedidoAprobarBody) {
+export function aprobarPedido(id: number, body: PedidoAprobarBody) {
   return apiFetch<{ status: string }>(`/api/inventory/pedidos/${id}/aprobar/`, { 
     method: "POST", 
-    body: body || { provisto_desde_almacen: false } 
+    body 
   });
+}
+
+export type DisponibilidadSucursal = {
+  sucursal_id: number;
+  sucursal_nombre: string;
+  puede_completar: boolean;
+  productos: {
+    producto_id: number;
+    producto_nombre: string;
+    cantidad_requerida: number;
+    cantidad_disponible: number;
+    suficiente: boolean;
+  }[];
+};
+
+export function getDisponibilidadSucursales(pedidoId: number) {
+  return apiFetch<DisponibilidadSucursal[]>(`/api/inventory/pedidos/${pedidoId}/disponibilidad_sucursales/`);
 }
 
 export function rechazarPedido(id: number) {
