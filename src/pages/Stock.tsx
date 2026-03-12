@@ -330,8 +330,8 @@ export default function StockPage() {
         </div>
       </CardHeader>
       <CardBody>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="min-w-0">
             <label className="block text-sm font-medium text-neutral-700 mb-2">
               Tipo de conservación
             </label>
@@ -347,7 +347,7 @@ export default function StockPage() {
             </select>
           </div>
           <div className="flex items-end">
-            <label className="flex items-center gap-2 cursor-pointer px-4 py-2.5 rounded-xl border border-neutral-300 hover:border-primary-400 hover:bg-primary-50 transition-all">
+            <label className="flex min-h-[46px] w-full items-center gap-2 cursor-pointer rounded-xl border border-neutral-300 px-4 py-2.5 transition-all hover:border-primary-400 hover:bg-primary-50">
               <input
                 type="checkbox"
                 checked={soloConStock}
@@ -364,11 +364,12 @@ export default function StockPage() {
 
   // ── DETAIL VIEW (sub-ubicación groups) — used by both sucursal user and admin drill-down ──
   const detailView = (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* header */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         {isAdmin && selectedUbicacion && (
           <Button
+            className="w-full sm:w-auto"
             variant="ghost"
             size="sm"
             onClick={() => setSelectedUbicacion(null)}
@@ -377,7 +378,7 @@ export default function StockPage() {
             Volver
           </Button>
         )}
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold text-neutral-900">
             {isAdmin && selectedUbicacion ? selectedUbicacion.nombre : "Mi Stock"}
           </h1>
@@ -391,26 +392,26 @@ export default function StockPage() {
       {filterBar}
 
       {/* summary */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Card className="bg-gradient-to-br from-primary-50 to-white border-primary-100">
-          <CardBody className="flex items-center gap-4">
-            <div className="p-3 bg-primary-100 rounded-xl">
-              <Package className="h-6 w-6 text-primary-600" />
+          <CardBody className="flex items-start gap-3 p-4 sm:gap-4">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary-100 sm:h-12 sm:w-12">
+              <Package className="h-5 w-5 text-primary-600 sm:h-6 sm:w-6" />
             </div>
-            <div>
-              <div className="text-sm text-neutral-500">Registros</div>
-              <div className="text-3xl font-bold text-neutral-900">{detailItems.length}</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-neutral-500 sm:text-sm">Registros</div>
+              <div className="break-words text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl">{detailItems.length}</div>
             </div>
           </CardBody>
         </Card>
         <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-100">
-          <CardBody className="flex items-center gap-4">
-            <div className="p-3 bg-emerald-100 rounded-xl">
-              <TrendingUp className="h-6 w-6 text-emerald-600" />
+          <CardBody className="flex items-start gap-3 p-4 sm:gap-4">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-100 sm:h-12 sm:w-12">
+              <TrendingUp className="h-5 w-5 text-emerald-600 sm:h-6 sm:w-6" />
             </div>
-            <div>
-              <div className="text-sm text-neutral-500">Unidades totales</div>
-              <div className="text-3xl font-bold text-neutral-900">
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-neutral-500 sm:text-sm">Unidades totales</div>
+              <div className="break-words text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl">
                 {detailItems.reduce((s, i) => s + i.cantidad, 0)}
               </div>
             </div>
@@ -474,7 +475,7 @@ export default function StockPage() {
       {filterBar}
 
       {/* location cards grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {sucursales
           .sort((a, b) => {
             // almacén last
@@ -495,13 +496,13 @@ export default function StockPage() {
                 key={suc.id}
                 onClick={() => setSelectedUbicacion({ id: suc.id, nombre: suc.nombre, tipo: suc.tipo })}
                 className={clsx(
-                  "text-left rounded-2xl border-2 p-5 transition-all hover:shadow-md hover:-translate-y-0.5",
+                  "rounded-2xl border-2 p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md sm:p-5",
                   isAlmacen
                     ? "border-amber-200 bg-amber-50 hover:border-amber-400"
                     : "border-primary-100 bg-white hover:border-primary-400"
                 )}
               >
-                <div className="flex items-start justify-between mb-4">
+                <div className="mb-4 flex items-start justify-between gap-3">
                   <div className={clsx(
                     "p-2.5 rounded-xl",
                     isAlmacen ? "bg-amber-100" : "bg-primary-100"
@@ -516,28 +517,28 @@ export default function StockPage() {
                   </Badge>
                 </div>
 
-                <div className="font-semibold text-neutral-900 text-lg leading-tight mb-1">
+                <div className="break-words text-lg font-semibold leading-tight text-neutral-900">
                   {suc.nombre}
                 </div>
 
-                <div className="flex items-center gap-4 mt-3 text-sm">
-                  <span className="text-neutral-500">
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm sm:gap-4">
+                  <span className="text-neutral-500 break-words">
                     <span className="font-bold text-neutral-800">{rows.length}</span> productos
                   </span>
-                  <span className="text-neutral-500">
+                  <span className="text-neutral-500 break-words">
                     <span className="font-bold text-neutral-800">{total}</span> uds.
                   </span>
                 </div>
 
                 {(bajo > 0 || sinSt > 0) && (
-                  <div className="flex items-center gap-3 mt-2 text-xs">
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                     {bajo  > 0 && <span className="text-orange-500 font-medium">⚠ {bajo} bajo stock</span>}
                     {sinSt > 0 && <span className="text-red-500 font-medium">✕ {sinSt} sin stock</span>}
                   </div>
                 )}
 
                 <div className={clsx(
-                  "mt-4 text-xs font-medium flex items-center gap-1",
+                  "mt-4 flex items-center gap-1 text-xs font-medium break-words",
                   isAlmacen ? "text-amber-600" : "text-primary-600"
                 )}>
                   Ver detalle →

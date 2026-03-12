@@ -1,6 +1,5 @@
 // src/pages/Orders.tsx
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { 
   createPedido, 
   enviarARevision, 
@@ -47,7 +46,6 @@ type PedidoItemForm = {
 };
 
 export default function Orders() {
-  const navigate = useNavigate();
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
@@ -751,7 +749,7 @@ export default function Orders() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900">Pedidos</h1>
           <p className="text-sm text-neutral-500 mt-1">Gestión de pedidos de mercadería</p>
@@ -759,6 +757,7 @@ export default function Orders() {
         
         {/* Toggle vista completa */}
         <Button 
+          className="w-full sm:w-auto"
           variant={vistaCompleta ? "primary" : "ghost"}
           onClick={() => {
             setVistaCompleta(!vistaCompleta);
@@ -791,7 +790,7 @@ export default function Orders() {
       {vistaCompleta && (
         <Card>
           <CardBody>
-            <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-neutral-700">
                   Estado
@@ -918,7 +917,7 @@ export default function Orders() {
 
       {/* Botón crear nuevo pedido */}
       {!showCreate && (
-        <Button onClick={() => setShowCreate(true)} size="lg">
+        <Button onClick={() => setShowCreate(true)} size="lg" className="w-full sm:w-auto">
           <Plus className="h-5 w-5" />
           Crear nuevo pedido
         </Button>
@@ -1037,7 +1036,7 @@ export default function Orders() {
                     return (
                       <div 
                         key={index} 
-                        className="flex gap-3 p-4 bg-white border border-neutral-200 rounded-lg hover:border-primary-300 transition-colors"
+                        className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white p-4 transition-colors hover:border-primary-300 sm:flex-row"
                       >
                         <div className="flex-1 space-y-3">
                           <select
@@ -1069,7 +1068,7 @@ export default function Orders() {
                               ))}
                           </select>
                           
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div>
                               <label className="block text-xs text-neutral-500 mb-1">Cantidad</label>
                               <Input
@@ -1096,7 +1095,7 @@ export default function Orders() {
                         <Button 
                           variant="ghost" 
                           onClick={() => removeItem(index)}
-                          className="self-start"
+                          className="w-full self-end sm:w-auto sm:self-start"
                         >
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
@@ -1117,11 +1116,11 @@ export default function Orders() {
               </Button>
             </div>
           </CardBody>
-          <CardFooter className="flex gap-3 justify-end">
-            <Button variant="ghost" onClick={() => setShowCreate(false)} disabled={busy}>
+          <CardFooter className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <Button className="w-full sm:w-auto" variant="ghost" onClick={() => setShowCreate(false)} disabled={busy}>
               Cancelar
             </Button>
-            <Button onClick={onCreate} disabled={busy || !destino || items.length === 0} loading={busy}>
+            <Button className="w-full sm:w-auto" onClick={onCreate} disabled={busy || !destino || items.length === 0} loading={busy}>
               Crear pedido
             </Button>
           </CardFooter>
@@ -1194,7 +1193,7 @@ export default function Orders() {
                     return (
                       <div 
                         key={index} 
-                        className="flex gap-3 p-4 bg-white border border-neutral-200 rounded-lg hover:border-primary-300 transition-colors"
+                        className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white p-4 transition-colors hover:border-primary-300 sm:flex-row"
                       >
                         <div className="flex-1 space-y-3">
                           <select
@@ -1226,7 +1225,7 @@ export default function Orders() {
                               ))}
                           </select>
                           
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div>
                               <label className="block text-xs text-neutral-500 mb-1">Cantidad</label>
                               <Input
@@ -1253,7 +1252,7 @@ export default function Orders() {
                         <Button 
                           variant="ghost" 
                           onClick={() => removeItem(index)}
-                          className="self-start"
+                          className="w-full self-end sm:w-auto sm:self-start"
                         >
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
@@ -1274,8 +1273,8 @@ export default function Orders() {
               </Button>
             </div>
           </CardBody>
-          <CardFooter className="flex gap-3 justify-end">
-            <Button variant="ghost" onClick={() => {
+          <CardFooter className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <Button className="w-full sm:w-auto" variant="ghost" onClick={() => {
               setShowEdit(false);
               setPedidoToEdit(null);
               setItems([]);
@@ -1283,7 +1282,7 @@ export default function Orders() {
             }} disabled={busy}>
               Cancelar
             </Button>
-            <Button onClick={onUpdate} disabled={busy || !destino || items.length === 0} loading={busy}>
+            <Button className="w-full sm:w-auto" onClick={onUpdate} disabled={busy || !destino || items.length === 0} loading={busy}>
               Actualizar pedido
             </Button>
           </CardFooter>
@@ -1304,7 +1303,7 @@ export default function Orders() {
         
         return (
           <div key={estado} className="space-y-3">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
               <button
                 onClick={() => {
                   setSeccionesColapsadas(prev => {
@@ -1343,19 +1342,19 @@ export default function Orders() {
             </div>
             
             {!estaColapsada && (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {pedidosEstado.map((pedido) => (
                 <Card key={pedido.id} className="hover:shadow-soft-lg transition-shadow">
                   <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1">
                         <CardTitle className="text-base">Pedido #{pedido.id}</CardTitle>
-                        <CardDescription className="flex items-center gap-1 mt-1">
+                        <CardDescription className="mt-1 flex items-center gap-1 break-words">
                           <MapPin className="h-3 w-3" />
                           {pedido.destino_nombre}
                         </CardDescription>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         {(pedido.estado === 'aprobado' || pedido.estado === 'recibido') && (
                           <button
                             onClick={() => handleDescargarPDF(pedido)}
@@ -1396,8 +1395,8 @@ export default function Orders() {
                       <div className="text-xs font-medium text-neutral-700">Productos:</div>
                       <div className="space-y-1.5">
                         {(expandedPedidos.has(pedido.id) ? pedido.items : pedido.items.slice(0, 2)).map(item => (
-                          <div key={item.id} className="flex justify-between text-xs text-neutral-600 bg-neutral-50 px-2 py-1.5 rounded">
-                            <span className="truncate">{item.producto_nombre}</span>
+                          <div key={item.id} className="flex items-start justify-between gap-2 rounded bg-neutral-50 px-2 py-1.5 text-xs text-neutral-600">
+                            <span className="min-w-0 flex-1 break-words">{item.producto_nombre}</span>
                             <span className="font-medium whitespace-nowrap ml-2">
                               {item.cantidad} × ${item.precio_costo_momento}
                             </span>
@@ -1447,7 +1446,7 @@ export default function Orders() {
                   {(pedido.estado === "borrador" || 
                     (pedido.estado === "pendiente" && isAdmin) || 
                     (pedido.estado === "aprobado" && (!isAdmin || isAlmacenDestino(pedido)))) && (
-                    <CardFooter className="flex gap-2">
+                    <CardFooter className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                       {pedido.estado === "borrador" && (
                         <>
                           <Button 
@@ -1455,6 +1454,7 @@ export default function Orders() {
                             disabled={busy}
                             size="sm"
                             variant="outline"
+                            className="w-full sm:w-auto"
                           >
                             <Edit className="h-4 w-4" />
                             Editar
@@ -1462,7 +1462,7 @@ export default function Orders() {
                           <Button 
                             onClick={() => onEnviarARevision(pedido.id)}
                             disabled={busy}
-                            className="flex-1"
+                            className="w-full sm:flex-1"
                             size="sm"
                           >
                             <Send className="h-4 w-4" />
@@ -1473,6 +1473,7 @@ export default function Orders() {
                             disabled={busy}
                             size="sm"
                             variant="danger"
+                            className="w-full sm:w-auto"
                           >
                             <Trash2 className="h-4 w-4" />
                             Cancelar
@@ -1484,7 +1485,7 @@ export default function Orders() {
                           <Button 
                             onClick={() => onAprobar(pedido.id)}
                             disabled={busy}
-                            className="flex-1"
+                            className="w-full sm:flex-1"
                             size="sm"
                             variant="success"
                           >
@@ -1494,7 +1495,7 @@ export default function Orders() {
                           <Button 
                             onClick={() => onRechazar(pedido.id)}
                             disabled={busy}
-                            className="flex-1"
+                            className="w-full sm:flex-1"
                             size="sm"
                             variant="danger"
                           >
@@ -1639,7 +1640,7 @@ export default function Orders() {
                 const stockInsuficiente = stockDisponible !== null && stockDisponible < item.cantidad;
 
                 return (
-                <div key={item.id} className="flex items-center gap-3 p-3 bg-white border border-neutral-200 rounded-lg">
+                <div key={item.id} className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white p-3 sm:flex-row sm:items-center">
                   <div className="flex-1">
                     <div className="font-medium text-sm text-neutral-900">{item.producto_nombre}</div>
                     <div className="text-xs text-neutral-500">Cantidad pedida: {item.cantidad}</div>
@@ -1660,7 +1661,7 @@ export default function Orders() {
                       ...prev,
                       [item.id]: Number(e.target.value)
                     }))}
-                    className={`px-3 py-2 rounded-xl border text-sm bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${
+                    className={`w-full rounded-xl border bg-white px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent sm:w-auto sm:min-w-[240px] ${
                       stockInsuficiente ? 'border-red-400' : 'border-neutral-300'
                     }`}
                   >
@@ -1811,7 +1812,7 @@ export default function Orders() {
                             const excedeStock = ub.cantidad > stockDisp;
                             
                             return (
-                              <div key={index} className={`flex items-center gap-2 p-2 rounded border ${excedeStock ? 'border-red-300 bg-red-50' : 'border-neutral-200'}`}>
+                              <div key={index} className={`flex flex-col gap-2 rounded border p-2 sm:flex-row sm:items-center ${excedeStock ? 'border-red-300 bg-red-50' : 'border-neutral-200'}`}>
                                 <div className="flex-1 text-xs">
                                   <div className="font-medium">{subUbicInfo?.nombre} ({subUbicInfo?.tipo})</div>
                                   <div className="text-neutral-500">Stock disponible: {stockDisp}</div>
@@ -1854,10 +1855,10 @@ export default function Orders() {
                       )}
 
                       {/* Botón agregar sub-ubicación */}
-                      <div className="flex gap-2">
+                      <div className="flex flex-col gap-2 sm:flex-row">
                         <select
                           id={`select-sub-${item.id}`}
-                          className="flex-1 px-3 py-2 rounded-xl border text-sm bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent border-neutral-300"
+                          className="flex-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         >
                           <option value="">Seleccionar sub-ubicación...</option>
                           {sucursalInfo?.sub_ubicaciones
@@ -1878,6 +1879,7 @@ export default function Orders() {
                         <Button
                           size="sm"
                           variant="ghost"
+                          className="w-full sm:w-auto"
                           onClick={() => {
                             const selectEl = document.getElementById(`select-sub-${item.id}`) as HTMLSelectElement;
                             const subUbicacionId = Number(selectEl.value);

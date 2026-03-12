@@ -8,13 +8,11 @@ import {
   MapPin,
   Package,
   FileText,
-  CheckSquare,
   ShoppingCart,
   BarChart3,
   Users,
   Warehouse,
   ClipboardCheck,
-  TruckIcon,
   LogOut,
   Menu,
   X,
@@ -70,7 +68,7 @@ function NavLink({
       </span>
       {!collapsed && (
         <>
-          <span className="flex-1">{label}</span>
+          <span className="flex-1 truncate">{label}</span>
           {badge !== undefined && badge > 0 && (
             <span className={clsx(
               "inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold",
@@ -293,7 +291,7 @@ export function Layout() {
       {/* Sidebar - Mobile */}
       <aside
         className={clsx(
-          "fixed inset-y-0 left-0 flex lg:hidden flex-col bg-white border-r border-neutral-200 w-72 z-50 transition-transform duration-300",
+          "fixed inset-y-0 left-0 flex w-[88vw] max-w-[20rem] lg:hidden flex-col bg-white border-r border-neutral-200 z-50 transition-transform duration-300",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -303,7 +301,7 @@ export function Layout() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Bar */}
-        <header className="h-16 bg-white border-b border-neutral-200 flex items-center justify-between px-4 lg:px-6">
+        <header className="flex h-16 items-center justify-between border-b border-neutral-200 bg-white px-3 sm:px-4 lg:px-6">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden flex items-center justify-center w-10 h-10 rounded-xl hover:bg-neutral-100 transition-colors"
@@ -327,7 +325,7 @@ export function Layout() {
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto custom-scrollbar">
-          <div className="p-4 lg:p-6 max-w-[1600px] mx-auto">
+          <div className="mx-auto max-w-[1600px] p-3 sm:p-4 lg:p-6">
             <Outlet />
           </div>
         </main>

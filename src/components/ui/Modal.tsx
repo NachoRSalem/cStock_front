@@ -46,7 +46,7 @@ export function Modal({
         </Transition.Child>
 
         <div className="fixed inset-0 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-4">
+          <div className="flex min-h-full items-center justify-center p-3 sm:p-4">
             <Transition.Child
               as={Fragment}
               enter="ease-out duration-300"
@@ -58,20 +58,20 @@ export function Modal({
             >
               <Dialog.Panel
                 className={clsx(
-                  'w-full transform rounded-2xl bg-white shadow-soft-xl transition-all',
+                  'flex max-h-[calc(100vh-1.5rem)] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-soft-xl transition-all',
                   sizeClasses[size]
                 )}
               >
                 {(title || description || showClose) && (
-                  <div className="flex items-start justify-between px-6 py-5 border-b border-neutral-100">
-                    <div className="flex-1">
+                  <div className="flex flex-col gap-3 border-b border-neutral-100 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:py-5">
+                    <div className="min-w-0 flex-1">
                       {title && (
                         <Dialog.Title className="text-lg font-semibold text-neutral-900">
                           {title}
                         </Dialog.Title>
                       )}
                       {description && (
-                        <Dialog.Description className="mt-1 text-sm text-neutral-500">
+                        <Dialog.Description className="mt-1 text-sm text-neutral-500 break-words">
                           {description}
                         </Dialog.Description>
                       )}
@@ -79,14 +79,14 @@ export function Modal({
                     {showClose && (
                       <button
                         onClick={onClose}
-                        className="ml-4 rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-colors"
+                        className="self-end rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-600 sm:ml-4 sm:self-auto"
                       >
                         <X className="h-5 w-5" />
                       </button>
                     )}
                   </div>
                 )}
-                <div className="px-6 py-5">{children}</div>
+                <div className="overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">{children}</div>
               </Dialog.Panel>
             </Transition.Child>
           </div>
@@ -106,7 +106,7 @@ export function ModalFooter({
   return (
     <div
       className={clsx(
-        'flex items-center justify-end gap-3 px-6 py-4 border-t border-neutral-100 bg-neutral-50/50 -mx-6 -mb-5 mt-6 rounded-b-2xl',
+        'mt-6 -mx-4 -mb-4 flex flex-col-reverse items-stretch justify-end gap-3 rounded-b-2xl border-t border-neutral-100 bg-neutral-50/50 px-4 py-4 sm:-mx-6 sm:-mb-5 sm:flex-row sm:items-center sm:px-6',
         className
       )}
     >

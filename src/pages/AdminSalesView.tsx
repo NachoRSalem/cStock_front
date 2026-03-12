@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { listVentas, type VentaDetalle, type VentasPaginadas } from "../api/sales";
+import { listVentas, type VentaDetalle } from "../api/sales";
 import { listSucursales, type Sucursal } from "../api/locations";
 import {
   Card,
@@ -164,6 +164,7 @@ export default function AdminSalesView() {
     async function loadDetalle() {
       setLoadingDetalle(true);
       try {
+        if (!selected) return;
         const data = await listVentas({ sucursal: selected.id, page: paginaActual });
         setVentasDetalle(data.results);
         setPaginacion({ count: data.count, next: data.next, previous: data.previous });
@@ -184,43 +185,43 @@ export default function AdminSalesView() {
     const totalPaginas = Math.ceil(paginacion.count / 10);
 
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => {
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Button variant="ghost" size="sm" className="w-full sm:w-auto" onClick={() => {
             setSelected(null);
             setPaginaActual(1);
           }}>
             <ArrowLeft className="h-4 w-4" />
             Volver
           </Button>
-          <div>
-            <h1 className="text-2xl font-bold text-neutral-900">{selected.nombre}</h1>
+          <div className="min-w-0">
+            <h1 className="break-words text-2xl font-bold text-neutral-900">{selected.nombre}</h1>
             <p className="text-sm text-neutral-500 mt-0.5">Historial de ventas</p>
           </div>
         </div>
 
         {err && <Alert variant="error">{err}</Alert>}
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Card className="bg-gradient-to-br from-primary-50 to-white border-primary-100">
-            <CardBody className="flex items-center gap-4">
-              <div className="p-3 bg-primary-100 rounded-xl">
-                <Receipt className="h-6 w-6 text-primary-600" />
+            <CardBody className="flex items-start gap-3 p-4 sm:gap-4">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary-100 sm:h-12 sm:w-12">
+                <Receipt className="h-5 w-5 text-primary-600 sm:h-6 sm:w-6" />
               </div>
-              <div>
-                <div className="text-sm text-neutral-500">Ventas totales</div>
-                <div className="text-3xl font-bold text-neutral-900">{paginacion.count}</div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs text-neutral-500 sm:text-sm">Ventas totales</div>
+                <div className="break-words text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl">{paginacion.count}</div>
               </div>
             </CardBody>
           </Card>
           <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-100">
-            <CardBody className="flex items-center gap-4">
-              <div className="p-3 bg-emerald-100 rounded-xl">
-                <DollarSign className="h-6 w-6 text-emerald-600" />
+            <CardBody className="flex items-start gap-3 p-4 sm:gap-4">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-100 sm:h-12 sm:w-12">
+                <DollarSign className="h-5 w-5 text-emerald-600 sm:h-6 sm:w-6" />
               </div>
-              <div>
-                <div className="text-sm text-neutral-500">Ingresos (página actual)</div>
-                <div className="text-3xl font-bold text-neutral-900">{fmtMoney(totalRev)}</div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs text-neutral-500 sm:text-sm">Ingresos (página actual)</div>
+                <div className="break-words text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl">{fmtMoney(totalRev)}</div>
               </div>
             </CardBody>
           </Card>
@@ -266,15 +267,16 @@ export default function AdminSalesView() {
 
             {/* Paginación */}
             {totalPaginas > 1 && (
-              <div className="flex items-center justify-between px-6 py-4 border-t border-neutral-200">
+              <div className="flex flex-col gap-3 border-t border-neutral-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                 <div className="text-sm text-neutral-600">
                   Mostrando <span className="font-medium">{ventasDetalle.length}</span> de{" "}
                   <span className="font-medium">{paginacion.count}</span> ventas
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <Button
                     variant="outline"
                     size="sm"
+                    className="w-full sm:w-auto"
                     onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
                     disabled={!paginacion.previous}
                   >
@@ -282,7 +284,7 @@ export default function AdminSalesView() {
                     Anterior
                   </Button>
                   
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 overflow-x-auto pb-1">
                     {Array.from({ length: Math.min(5, totalPaginas) }, (_, i) => {
                       let pageNum: number;
                       if (totalPaginas <= 5) {
@@ -315,6 +317,7 @@ export default function AdminSalesView() {
                   <Button
                     variant="outline"
                     size="sm"
+                    className="w-full sm:w-auto"
                     onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))}
                     disabled={!paginacion.next}
                   >
@@ -349,48 +352,48 @@ export default function AdminSalesView() {
       {err && <Alert variant="error">{err}</Alert>}
 
       {/* global summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-100">
-          <CardBody className="flex items-center gap-4">
-            <div className="p-3 bg-blue-100 rounded-xl">
-              <Building2 className="h-6 w-6 text-blue-600" />
+          <CardBody className="flex items-start gap-3 p-4 sm:gap-4">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100 sm:h-12 sm:w-12">
+              <Building2 className="h-5 w-5 text-blue-600 sm:h-6 sm:w-6" />
             </div>
-            <div>
-              <div className="text-sm text-neutral-500">Sucursales</div>
-              <div className="text-3xl font-bold text-neutral-900">{sucursales.length}</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-neutral-500 sm:text-sm">Sucursales</div>
+              <div className="break-words text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl">{sucursales.length}</div>
             </div>
           </CardBody>
         </Card>
         <Card className="bg-gradient-to-br from-primary-50 to-white border-primary-100">
-          <CardBody className="flex items-center gap-4">
-            <div className="p-3 bg-primary-100 rounded-xl">
-              <Receipt className="h-6 w-6 text-primary-600" />
+          <CardBody className="flex items-start gap-3 p-4 sm:gap-4">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary-100 sm:h-12 sm:w-12">
+              <Receipt className="h-5 w-5 text-primary-600 sm:h-6 sm:w-6" />
             </div>
-            <div>
-              <div className="text-sm text-neutral-500">Total ventas</div>
-              <div className="text-3xl font-bold text-neutral-900">{allVentas.length}</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-neutral-500 sm:text-sm">Total ventas</div>
+              <div className="break-words text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl">{allVentas.length}</div>
             </div>
           </CardBody>
         </Card>
         <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-100">
-          <CardBody className="flex items-center gap-4">
-            <div className="p-3 bg-emerald-100 rounded-xl">
-              <DollarSign className="h-6 w-6 text-emerald-600" />
+          <CardBody className="flex items-start gap-3 p-4 sm:gap-4">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-100 sm:h-12 sm:w-12">
+              <DollarSign className="h-5 w-5 text-emerald-600 sm:h-6 sm:w-6" />
             </div>
-            <div>
-              <div className="text-sm text-neutral-500">Ingresos totales</div>
-              <div className="text-3xl font-bold text-neutral-900">{fmtMoney(totalGlobal)}</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-neutral-500 sm:text-sm">Ingresos totales</div>
+              <div className="break-words text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl">{fmtMoney(totalGlobal)}</div>
             </div>
           </CardBody>
         </Card>
         <Card className="bg-gradient-to-br from-purple-50 to-white border-purple-100">
-          <CardBody className="flex items-center gap-4">
-            <div className="p-3 bg-purple-100 rounded-xl">
-              <TrendingUp className="h-6 w-6 text-purple-600" />
+          <CardBody className="flex items-start gap-3 p-4 sm:gap-4">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-purple-100 sm:h-12 sm:w-12">
+              <TrendingUp className="h-5 w-5 text-purple-600 sm:h-6 sm:w-6" />
             </div>
-            <div>
-              <div className="text-sm text-neutral-500">Ticket promedio</div>
-              <div className="text-3xl font-bold text-neutral-900">
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-neutral-500 sm:text-sm">Ticket promedio</div>
+              <div className="break-words text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl">
                 {allVentas.length > 0 ? fmtMoney(totalGlobal / allVentas.length) : "$0"}
               </div>
             </div>
@@ -399,7 +402,7 @@ export default function AdminSalesView() {
       </div>
 
       {/* location cards grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {sucursales
           .sort((a, b) => {
             if (a.tipo === "almacen" && b.tipo !== "almacen") return 1;
@@ -417,13 +420,13 @@ export default function AdminSalesView() {
                 key={suc.id}
                 onClick={() => setSelected({ id: suc.id, nombre: suc.nombre, tipo: suc.tipo })}
                 className={clsx(
-                  "text-left rounded-2xl border-2 p-5 transition-all hover:shadow-md hover:-translate-y-0.5",
+                  "rounded-2xl border-2 p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md sm:p-5",
                   isAlmacen
                     ? "border-amber-200 bg-amber-50 hover:border-amber-400"
                     : "border-primary-100 bg-white hover:border-primary-400"
                 )}
               >
-                <div className="flex items-start justify-between mb-4">
+                <div className="mb-4 flex items-start justify-between gap-3">
                   <div className={clsx("p-2.5 rounded-xl", isAlmacen ? "bg-amber-100" : "bg-primary-100")}>
                     {isAlmacen
                       ? <Warehouse  className="h-6 w-6 text-amber-600" />
@@ -434,21 +437,21 @@ export default function AdminSalesView() {
                   </Badge>
                 </div>
 
-                <div className="font-semibold text-neutral-900 text-lg leading-tight mb-1">
+                <div className="break-words text-lg font-semibold leading-tight text-neutral-900">
                   {suc.nombre}
                 </div>
 
-                <div className="flex items-center gap-4 mt-3 text-sm">
-                  <span className="text-neutral-500">
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm sm:gap-4">
+                  <span className="text-neutral-500 break-words">
                     <span className="font-bold text-neutral-800">{ventas.length}</span> ventas
                   </span>
-                  <span className="font-bold text-emerald-600">{fmtMoney(total)}</span>
+                  <span className="break-all font-bold text-emerald-600">{fmtMoney(total)}</span>
                 </div>
 
                 {lastVenta && (
-                  <div className="flex items-center gap-1 mt-2 text-xs text-neutral-400">
+                  <div className="mt-2 flex items-start gap-1 text-xs text-neutral-400">
                     <Calendar className="h-3 w-3" />
-                    Última: {fmtDate(lastVenta.fecha)}
+                    <span className="break-words">Última: {fmtDate(lastVenta.fecha)}</span>
                   </div>
                 )}
 

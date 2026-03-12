@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { listVentas, type VentaDetalle, type VentasPaginadas } from "../api/sales";
+import { listVentas, type VentaDetalle } from "../api/sales";
 import { tokenStorage } from "../utils/storage";
 import {
   Card,
@@ -177,37 +177,37 @@ export default function SucursalSalesView() {
       {err && <Alert variant="error">{err}</Alert>}
 
       {/* summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <Card className="bg-gradient-to-br from-primary-50 to-white border-primary-100">
-          <CardBody className="flex items-center gap-4">
-            <div className="p-3 bg-primary-100 rounded-xl">
-              <Receipt className="h-6 w-6 text-primary-600" />
+          <CardBody className="flex items-start gap-3 p-4 sm:gap-4">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary-100 sm:h-12 sm:w-12">
+              <Receipt className="h-5 w-5 text-primary-600 sm:h-6 sm:w-6" />
             </div>
-            <div>
-              <div className="text-sm text-neutral-500">Total ventas</div>
-              <div className="text-3xl font-bold text-neutral-900">{paginacion.count}</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-neutral-500 sm:text-sm">Total ventas</div>
+              <div className="break-words text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl">{paginacion.count}</div>
             </div>
           </CardBody>
         </Card>
         <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-100">
-          <CardBody className="flex items-center gap-4">
-            <div className="p-3 bg-emerald-100 rounded-xl">
-              <DollarSign className="h-6 w-6 text-emerald-600" />
+          <CardBody className="flex items-start gap-3 p-4 sm:gap-4">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-100 sm:h-12 sm:w-12">
+              <DollarSign className="h-5 w-5 text-emerald-600 sm:h-6 sm:w-6" />
             </div>
-            <div>
-              <div className="text-sm text-neutral-500">Ingresos (página actual)</div>
-              <div className="text-3xl font-bold text-neutral-900">{fmtMoney(totalRev)}</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-neutral-500 sm:text-sm">Ingresos (página actual)</div>
+              <div className="break-words text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl">{fmtMoney(totalRev)}</div>
             </div>
           </CardBody>
         </Card>
         <Card className="bg-gradient-to-br from-purple-50 to-white border-purple-100">
-          <CardBody className="flex items-center gap-4">
-            <div className="p-3 bg-purple-100 rounded-xl">
-              <TrendingUp className="h-6 w-6 text-purple-600" />
+          <CardBody className="flex items-start gap-3 p-4 sm:gap-4">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-purple-100 sm:h-12 sm:w-12">
+              <TrendingUp className="h-5 w-5 text-purple-600 sm:h-6 sm:w-6" />
             </div>
-            <div>
-              <div className="text-sm text-neutral-500">Ticket promedio</div>
-              <div className="text-3xl font-bold text-neutral-900">{fmtMoney(avgTicket)}</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-neutral-500 sm:text-sm">Ticket promedio</div>
+              <div className="break-words text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl">{fmtMoney(avgTicket)}</div>
             </div>
           </CardBody>
         </Card>
@@ -247,15 +247,16 @@ export default function SucursalSalesView() {
 
           {/* Paginación */}
           {totalPaginas > 1 && (
-            <div className="flex items-center justify-between px-6 py-4 border-t border-neutral-200">
+            <div className="flex flex-col gap-3 border-t border-neutral-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <div className="text-sm text-neutral-600">
                 Mostrando <span className="font-medium">{ventas.length}</span> de{" "}
                 <span className="font-medium">{paginacion.count}</span> ventas
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Button
                   variant="outline"
                   size="sm"
+                  className="w-full sm:w-auto"
                   onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
                   disabled={!paginacion.previous}
                 >
@@ -263,7 +264,7 @@ export default function SucursalSalesView() {
                   Anterior
                 </Button>
                 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 overflow-x-auto pb-1">
                   {Array.from({ length: Math.min(5, totalPaginas) }, (_, i) => {
                     let pageNum: number;
                     if (totalPaginas <= 5) {
@@ -296,6 +297,7 @@ export default function SucursalSalesView() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="w-full sm:w-auto"
                   onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))}
                   disabled={!paginacion.next}
                 >

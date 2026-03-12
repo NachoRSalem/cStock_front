@@ -30,7 +30,7 @@ export const CardHeader = forwardRef<
   return (
     <div
       ref={ref}
-      className={clsx('px-6 py-5 border-b border-neutral-100', className)}
+      className={clsx('px-4 py-4 sm:px-6 sm:py-5 border-b border-neutral-100', className)}
       {...props}
     />
   );
@@ -75,7 +75,7 @@ export const CardBody = forwardRef<
   return (
     <div
       ref={ref}
-      className={clsx('px-6 py-5', className)}
+      className={clsx('px-4 py-4 sm:px-6 sm:py-5', className)}
       {...props}
     />
   );
@@ -90,7 +90,7 @@ export const CardFooter = forwardRef<
   return (
     <div
       ref={ref}
-      className={clsx('px-6 py-4 border-t border-neutral-100 bg-neutral-50/50', className)}
+      className={clsx('px-4 py-3 sm:px-6 sm:py-4 border-t border-neutral-100 bg-neutral-50/50', className)}
       {...props}
     />
   );
