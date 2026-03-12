@@ -10,15 +10,9 @@ import {
   CardDescription, 
   CardBody, 
   Button, 
-  Modal, 
-  ModalFooter,
+  Modal,
   Alert,
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell
+  Badge
 } from "../components/ui";
 import { 
   ShoppingCart, 
@@ -29,9 +23,46 @@ import {
   Package, 
   MapPin,
   CheckCircle,
-  X
+  AlertCircle
 } from "lucide-react";
 import clsx from 'clsx';
+
+// ─── Helpers de vencimiento ──────────────────────────────────────────────────
+
+function vencimientoEstado(diasParaVencer: number | null) {
+  if (diasParaVencer === null) return null;
+  if (diasParaVencer <= 0) return "vencido";
+  if (diasParaVencer <= 7) return "critico";
+  if (diasParaVencer <= 30) return "proximo";
+  return "vigente";
+}
+
+function vencimientoBadgeVariant(estado: string | null): "default" | "draft" | "pending" | "approved" | "danger" {
+  if (estado === "vencido") return "danger";
+  if (estado === "critico") return "draft";
+  if (estado === "proximo") return "pending";
+  return "approved";
+}
+
+function vencimientoTexto(diasParaVencer: number | null, fechaVencimiento: string | null) {
+  if (diasParaVencer === null || !fechaVencimiento) return null;
+  
+  if (diasParaVencer <= 0) {
+    const diasVencido = Math.abs(diasParaVencer);
+    return `⚠️ Vencido hace ${diasVencido}d`;
+  }
+  
+  if (diasParaVencer <= 7) {
+    return `⏰ Vence en ${diasParaVencer}d`;
+  }
+  
+  if (diasParaVencer <= 30) {
+    return `⏳ ${diasParaVencer}d`;
+  }
+  
+  const fecha = new Date(fechaVencimiento);
+  return `✓ ${fecha.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}`;
+}
 
 type CartItem = {
   producto: number;
@@ -41,6 +72,9 @@ type CartItem = {
   cantidad: number;
   precio_venta_momento: number;
   stock_disponible: number;
+  lote: string | null;
+  fecha_vencimiento: string | null;
+  dias_para_vencer: number | null;
 };
 
 export default function Sales() {
@@ -61,7 +95,6 @@ export default function Sales() {
 
   const session = tokenStorage.getSession();
   const sucursal = tokenStorage.getSucursal();
-  const isAdmin = session?.rol === "admin";
 
   useEffect(() => {
     loadData();
@@ -95,12 +128,16 @@ export default function Sales() {
 
   const addToCart = (producto: Producto, stockItem: Stock) => {
     const existingItem = cart.find(
-      item => item.producto === producto.id && item.sub_ubicacion_origen === stockItem.sub_ubicacion
+      item => item.producto === producto.id && 
+             item.sub_ubicacion_origen === stockItem.sub_ubicacion &&
+             item.lote === stockItem.lote
     );
 
     if (existingItem) {
       setCart(cart.map(item =>
-        item.producto === producto.id && item.sub_ubicacion_origen === stockItem.sub_ubicacion
+        item.producto === producto.id && 
+        item.sub_ubicacion_origen === stockItem.sub_ubicacion &&
+        item.lote === stockItem.lote
           ? { ...item, cantidad: Math.min(item.cantidad + 1, item.stock_disponible) }
           : item
       ));
@@ -112,7 +149,10 @@ export default function Sales() {
         sub_ubicacion_nombre: stockItem.sub_ubicacion_nombre,
         cantidad: 1,
         precio_venta_momento: parseFloat(producto.precio_venta),
-        stock_disponible: stockItem.cantidad
+        stock_disponible: stockItem.cantidad,
+        lote: stockItem.lote,
+        fecha_vencimiento: stockItem.fecha_vencimiento,
+        dias_para_vencer: stockItem.dias_para_vencer,
       }]);
     }
   };
@@ -260,18 +300,49 @@ export default function Sales() {
 
                         {/* Sub-ubicaciones disponibles */}
                         <div className="flex flex-wrap gap-2 mt-3">
-                          {stockItems.map((stockItem) => (
-                            <button
-                              key={stockItem.id}
-                              onClick={() => addToCart(producto, stockItem)}
-                              className="flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors text-sm"
-                            >
-                              <MapPin className="h-4 w-4" />
-                              <span>{stockItem.sub_ubicacion_nombre}</span>
-                              <span className="font-semibold">({stockItem.cantidad})</span>
-                              <Plus className="h-4 w-4" />
-                            </button>
-                          ))}
+                          {stockItems
+                            .sort((a, b) => {
+                              // Ordenar por vencimiento: vencidos/por vencer primero
+                              if (a.dias_para_vencer === null) return 1;
+                              if (b.dias_para_vencer === null) return -1;
+                              return a.dias_para_vencer - b.dias_para_vencer;
+                            })
+                            .map((stockItem) => {
+                              const estado = vencimientoEstado(stockItem.dias_para_vencer);
+                              const textoVenc = vencimientoTexto(stockItem.dias_para_vencer, stockItem.fecha_vencimiento);
+                              const isVencidoOCritico = estado === "vencido" || estado === "critico";
+                              
+                              return (
+                                <button
+                                  key={stockItem.id}
+                                  onClick={() => addToCart(producto, stockItem)}
+                                  className={clsx(
+                                    "flex flex-col items-start gap-1 px-3 py-2 rounded-lg transition-colors text-sm border-2",
+                                    isVencidoOCritico 
+                                      ? "bg-red-50 hover:bg-red-100 text-red-700 border-red-200 hover:border-red-300"
+                                      : "bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 hover:border-blue-300"
+                                  )}
+                                >
+                                  <div className="flex items-center gap-2 w-full">
+                                    <MapPin className="h-4 w-4" />
+                                    <span>{stockItem.sub_ubicacion_nombre}</span>
+                                    <span className="font-semibold">({stockItem.cantidad})</span>
+                                    <Plus className="h-3.5 w-3.5 ml-auto" />
+                                  </div>
+                                  {textoVenc && (
+                                    <div className="flex items-center gap-1 text-xs">
+                                      {isVencidoOCritico && <AlertCircle className="h-3 w-3" />}
+                                      <span>{textoVenc}</span>
+                                    </div>
+                                  )}
+                                  {stockItem.lote && (
+                                    <div className="text-xs opacity-75">
+                                      Lote: {stockItem.lote}
+                                    </div>
+                                  )}
+                                </button>
+                              );
+                            })}
                         </div>
                       </div>
                     );
@@ -304,23 +375,40 @@ export default function Sales() {
                 <>
                   {/* Lista de productos con scroll */}
                   <div className="space-y-3 overflow-y-auto flex-1 pr-2" style={{ maxHeight: 'calc(100vh - 24rem)' }}>
-                    {cart.map((item, index) => (
-                      <div key={index} className="p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-900 text-sm">{item.producto_nombre}</p>
-                            <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                              <MapPin className="h-3 w-3" />
-                              {item.sub_ubicacion_nombre}
-                            </p>
+                    {cart.map((item, index) => {
+                      const estado = vencimientoEstado(item.dias_para_vencer);
+                      const textoVenc = vencimientoTexto(item.dias_para_vencer, item.fecha_vencimiento);
+                      
+                      return (
+                        <div key={index} className="p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <p className="font-medium text-gray-900 text-sm">{item.producto_nombre}</p>
+                              <div className="flex flex-col gap-1 mt-1">
+                                <p className="text-xs text-gray-500 flex items-center gap-1">
+                                  <MapPin className="h-3 w-3" />
+                                  {item.sub_ubicacion_nombre}
+                                </p>
+                                {textoVenc && (
+                                  <Badge 
+                                    variant={vencimientoBadgeVariant(estado)}
+                                    className="text-xs w-fit"
+                                  >
+                                    {textoVenc}
+                                  </Badge>
+                                )}
+                                {item.lote && (
+                                  <p className="text-xs text-gray-400">Lote: {item.lote}</p>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => removeFromCart(index)}
+                              className="text-red-500 hover:text-red-700 p-1"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </div>
-                          <button
-                            onClick={() => removeFromCart(index)}
-                            className="text-red-500 hover:text-red-700 p-1"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
 
                         <div className="flex items-center justify-between mt-2">
                           <div className="flex items-center gap-2">
@@ -350,9 +438,10 @@ export default function Sales() {
                           <p className="font-bold text-gray-900">
                             ${(item.cantidad * item.precio_venta_momento).toFixed(2)}
                           </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {/* Total y botón de confirmación - siempre visible */}

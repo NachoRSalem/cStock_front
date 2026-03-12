@@ -14,13 +14,15 @@ import {
   type ProductoCreateUpdate,
   type CategoriaCreateUpdate
 } from "../api/products";
+import { listSucursales, type Sucursal } from "../api/locations";
+import { listStock, updateStock, createStock, type Stock } from "../api/stock";
+import { tokenStorage } from "../utils/storage";
 import { 
   Card, 
   CardHeader, 
   CardTitle, 
   CardDescription, 
   CardBody, 
-  CardFooter, 
   Button, 
   Badge, 
   Input, 
@@ -36,12 +38,15 @@ import {
   TableCell,
   ConfirmDialog
 } from "../components/ui";
-import { Plus, Edit2, Trash2, Package, Tag, Thermometer, Refrigerator, Snowflake, Search, DollarSign, Filter } from "lucide-react";
+import { Plus, Edit2, Trash2, Package, Tag, Thermometer, Refrigerator, Snowflake, Search, DollarSign, Filter, PackagePlus } from "lucide-react";
 import clsx from 'clsx';
 
 type TabType = "productos" | "categorias";
 
 export default function Products() {
+  const session = tokenStorage.getSession();
+  const isAdmin = session?.rol === "admin";
+  
   const [tab, setTab] = useState<TabType>("productos");
   const [productos, setProductos] = useState<Producto[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -63,7 +68,8 @@ export default function Products() {
     tipo_conservacion: "ambiente",
     precio_venta: "",
     costo_compra: "",
-    sku: ""
+    sku: "",
+    dias_caducidad: null
   });
   
   // Formulario categoría
@@ -76,6 +82,14 @@ export default function Products() {
   const [showDeleteCatConfirm, setShowDeleteCatConfirm] = useState(false);
   const [deleteProductData, setDeleteProductData] = useState<{ id: number; nombre: string } | null>(null);
   const [deleteCatData, setDeleteCatData] = useState<{ id: number; nombre: string } | null>(null);
+
+  // Estados para modal de actualizar stock
+  const [showStockModal, setShowStockModal] = useState(false);
+  const [selectedProductForStock, setSelectedProductForStock] = useState<Producto | null>(null);
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [selectedSucursalForStock, setSelectedSucursalForStock] = useState<number | null>(null);
+  const [stockItems, setStockItems] = useState<Stock[]>([]);
+  const [stockUpdates, setStockUpdates] = useState<Record<number, number>>({});
 
   useEffect(() => {
     loadData();
@@ -114,7 +128,8 @@ export default function Products() {
         tipo_conservacion: product.tipo_conservacion,
         precio_venta: product.precio_venta,
         costo_compra: product.costo_compra,
-        sku: product.sku || ""
+        sku: product.sku || "",
+        dias_caducidad: product.dias_caducidad
       });
     } else {
       setEditingProduct(null);
@@ -124,7 +139,8 @@ export default function Products() {
         tipo_conservacion: "ambiente",
         precio_venta: "",
         costo_compra: "",
-        sku: ""
+        sku: "",
+        dias_caducidad: null
       });
     }
     setShowProductForm(true);
@@ -241,6 +257,100 @@ export default function Products() {
     }
   }
 
+  // Funciones para modal de stock
+  async function openStockModal(product: Producto) {
+    setSelectedProductForStock(product);
+    setShowStockModal(true);
+    setSelectedSucursalForStock(null);
+    setStockItems([]);
+    setStockUpdates({});
+    
+    // Cargar sucursales
+    try {
+      const sucursalesData = await listSucursales();
+      setSucursales(sucursalesData);
+    } catch (e: any) {
+      setErr(e?.message ?? "Error cargando sucursales");
+    }
+  }
+
+  function closeStockModal() {
+    setShowStockModal(false);
+    setSelectedProductForStock(null);
+    setSelectedSucursalForStock(null);
+    setStockItems([]);
+    setStockUpdates({});
+  }
+
+  async function handleSucursalChange(sucursalId: number) {
+    setSelectedSucursalForStock(sucursalId);
+    setStockUpdates({});
+    
+    if (!selectedProductForStock) return;
+    
+    // Cargar stock del producto en esa sucursal
+    try {
+      const stockData = await listStock({
+        producto: selectedProductForStock.id,
+        ubicacion: sucursalId
+      });
+      setStockItems(stockData);
+    } catch (e: any) {
+      setErr(e?.message ?? "Error cargando stock");
+    }
+  }
+
+  function handleStockQuantityChange(subUbicacionId: number, newQuantity: number) {
+    if (newQuantity < 0) return;
+    setStockUpdates(prev => ({
+      ...prev,
+      [subUbicacionId]: newQuantity
+    }));
+  }
+
+  async function handleSaveStock() {
+    if (!selectedProductForStock || !selectedSucursalForStock) return;
+    
+    setBusy(true);
+    setErr(null);
+    
+    try {
+      const today = new Date().toISOString().split('T')[0]; // Formato YYYY-MM-DD
+      
+      // Procesar cada cambio de stock
+      for (const [subUbicacionId, newQuantity] of Object.entries(stockUpdates)) {
+        const existingStock = stockItems.find(s => s.sub_ubicacion === parseInt(subUbicacionId));
+        
+        if (existingStock) {
+          // Actualizar stock existente
+          await updateStock(existingStock.id, { cantidad: newQuantity });
+        } else {
+          // Crear nuevo registro de stock
+          const createBody: any = {
+            producto: selectedProductForStock.id,
+            sub_ubicacion: parseInt(subUbicacionId),
+            cantidad: newQuantity
+          };
+          
+          // Si el producto tiene días de caducidad, agregar fecha_ingreso y generar lote
+          if (selectedProductForStock.dias_caducidad) {
+            createBody.fecha_ingreso = today;
+            createBody.lote = `LOTE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          }
+          
+          await createStock(createBody);
+        }
+      }
+      
+      closeStockModal();
+      // Opcional: recargar la tabla si muestras stock en ella
+    } catch (e: any) {
+      setErr(e?.message ?? "Error actualizando stock");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const getTipoIcon = (tipo: string) => {
     switch (tipo) {
       case "ambiente":
@@ -318,7 +428,7 @@ export default function Products() {
           {!showProductForm && (
             <Button onClick={() => openProductForm()} size="lg">
               <Plus className="h-5 w-5" />
-              Crear nuevo producto
+              Registrar nuevo producto
             </Button>
           )}
 
@@ -376,6 +486,15 @@ export default function Products() {
                   value={productForm.sku || ""}
                   onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })}
                   placeholder="Opcional"
+                />
+
+                <Input
+                  label="Días de caducidad"
+                  type="number"
+                  value={productForm.dias_caducidad || ""}
+                  onChange={(e) => setProductForm({ ...productForm, dias_caducidad: e.target.value ? parseInt(e.target.value) : null })}
+                  placeholder="Ej: 90 días = 3 meses"
+                  helperText="Días desde la compra hasta el vencimiento (opcional)"
                 />
 
                 <Input
@@ -537,6 +656,18 @@ export default function Products() {
                               >
                                 <Edit2 className="h-4 w-4" />
                               </Button>
+                              {isAdmin && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openStockModal(prod)}
+                                  disabled={busy}
+                                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  title="Actualizar Stock"
+                                >
+                                  <PackagePlus className="h-4 w-4" />
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -682,6 +813,163 @@ export default function Products() {
         variant="danger"
         loading={busy}
       />
+
+      {/* Modal de Actualizar Stock */}
+      <Modal
+        open={showStockModal}
+        onClose={closeStockModal}
+        title={`Actualizar Stock - ${selectedProductForStock?.nombre || ""}`}
+        description="Seleccioná una sucursal y actualizá el stock en sus sub-ubicaciones"
+        size="lg"
+      >
+        <div className="space-y-4">
+          {/* Selector de sucursal */}
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">
+              Sucursal / Almacén
+            </label>
+            <select
+              className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              value={selectedSucursalForStock || ""}
+              onChange={(e) => handleSucursalChange(parseInt(e.target.value))}
+              disabled={busy}
+            >
+              <option value="">Seleccionar sucursal...</option>
+              {sucursales.map((suc) => (
+                <option key={suc.id} value={suc.id}>
+                  {suc.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Aviso sobre caducidad */}
+          {selectedProductForStock?.dias_caducidad && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-start gap-2">
+                <div className="text-blue-600 mt-0.5">ℹ️</div>
+                <div className="text-sm text-blue-900">
+                  <strong>Producto con caducidad:</strong> Este producto tiene configurado un tiempo de caducidad de {selectedProductForStock.dias_caducidad} días. 
+                  Al agregar nuevo stock, se registrará automáticamente la fecha de ingreso para el control de vencimientos.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Lista de sub-ubicaciones con stock */}
+          {selectedSucursalForStock && (
+            <div className="border border-neutral-200 rounded-lg overflow-hidden">
+              <div className="bg-neutral-50 px-4 py-3 border-b border-neutral-200">
+                <h3 className="font-medium text-neutral-900">Sub-ubicaciones</h3>
+              </div>
+              <div className="divide-y divide-neutral-100">
+                {sucursales
+                  .find((s) => s.id === selectedSucursalForStock)
+                  ?.sub_ubicaciones.map((subUbic) => {
+                    const existingStock = stockItems.find(
+                      (s) => s.sub_ubicacion === subUbic.id
+                    );
+                    const currentQuantity = stockUpdates[subUbic.id] ?? existingStock?.cantidad ?? 0;
+
+                    // Información de vencimiento
+                    const hasExpiration = existingStock?.fecha_vencimiento;
+                    const diasParaVencer = existingStock?.dias_para_vencer ?? null;
+                    const isExpiringSoon = diasParaVencer !== null && diasParaVencer <= 30 && diasParaVencer > 0;
+                    const isExpired = diasParaVencer !== null && diasParaVencer <= 0;
+
+                    return (
+                      <div
+                        key={subUbic.id}
+                        className="flex items-center justify-between p-4 hover:bg-neutral-50"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-neutral-100 rounded-lg">
+                            {subUbic.tipo === "ambiente" && <Thermometer className="h-5 w-5 text-amber-600" />}
+                            {subUbic.tipo === "heladera" && <Refrigerator className="h-5 w-5 text-blue-600" />}
+                            {subUbic.tipo === "freezer" && <Snowflake className="h-5 w-5 text-cyan-600" />}
+                          </div>
+                          <div>
+                            <div className="font-medium text-neutral-900">{subUbic.nombre}</div>
+                            <div className="text-xs text-neutral-500 capitalize">{subUbic.tipo}</div>
+                            {hasExpiration && (
+                              <div className="text-xs mt-1">
+                                {isExpired && (
+                                  <span className="text-red-600 font-medium">⚠️ Vencido</span>
+                                )}
+                                {isExpiringSoon && !isExpired && (
+                                  <span className="text-orange-600 font-medium">⏰ Vence en {diasParaVencer} días</span>
+                                )}
+                                {!isExpired && !isExpiringSoon && diasParaVencer !== null && (
+                                  <span className="text-green-600">✓ Vence en {diasParaVencer} días</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-sm text-neutral-600">
+                            Stock actual: <span className="font-semibold">{existingStock?.cantidad || 0}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                handleStockQuantityChange(subUbic.id, Math.max(0, currentQuantity - 1))
+                              }
+                              disabled={busy || currentQuantity <= 0}
+                            >
+                              -
+                            </Button>
+                            <Input
+                              type="number"
+                              value={currentQuantity}
+                              onChange={(e) =>
+                                handleStockQuantityChange(subUbic.id, parseInt(e.target.value) || 0)
+                              }
+                              className="w-20 text-center"
+                              min="0"
+                              disabled={busy}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                handleStockQuantityChange(subUbic.id, currentQuantity + 1)
+                              }
+                              disabled={busy}
+                            >
+                              +
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
+          {!selectedSucursalForStock && (
+            <div className="text-center py-8 text-neutral-500">
+              Seleccioná una sucursal para ver sus sub-ubicaciones
+            </div>
+          )}
+        </div>
+
+        <ModalFooter>
+          <Button variant="ghost" onClick={closeStockModal} disabled={busy}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleSaveStock}
+            loading={busy}
+            disabled={!selectedSucursalForStock || Object.keys(stockUpdates).length === 0}
+          >
+            Guardar Stock
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   );
 }

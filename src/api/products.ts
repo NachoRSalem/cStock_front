@@ -14,6 +14,7 @@ export type Producto = {
   precio_venta: string;
   costo_compra: string;
   sku: string | null;
+  dias_caducidad: number | null;
 };
 
 export type ProductoCreateUpdate = {
@@ -23,6 +24,7 @@ export type ProductoCreateUpdate = {
   precio_venta: string | number;
   costo_compra: string | number;
   sku?: string | null;
+  dias_caducidad?: number | null;
 };
 
 export type CategoriaCreateUpdate = {

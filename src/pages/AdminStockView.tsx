@@ -31,6 +31,7 @@ import {
   Layers,
   ArrowLeft,
   Warehouse,
+  MapPin,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -57,6 +58,41 @@ function stockColor(cantidad: number) {
   return "text-emerald-600";
 }
 
+function vencimientoEstado(diasParaVencer: number | null) {
+  if (diasParaVencer === null) return null;
+  if (diasParaVencer <= 0) return "vencido";
+  if (diasParaVencer <= 7) return "critico";
+  if (diasParaVencer <= 30) return "proximo";
+  return "vigente";
+}
+
+function vencimientoBadgeVariant(estado: string | null): "default" | "draft" | "pending" | "approved" | "danger" {
+  if (estado === "vencido") return "danger";
+  if (estado === "critico") return "draft";
+  if (estado === "proximo") return "pending";
+  return "approved";
+}
+
+function vencimientoTexto(diasParaVencer: number | null, fechaVencimiento: string | null) {
+  if (diasParaVencer === null || !fechaVencimiento) return null;
+  
+  if (diasParaVencer <= 0) {
+    const diasVencido = Math.abs(diasParaVencer);
+    return `⚠️ Vencido hace ${diasVencido} día${diasVencido !== 1 ? 's' : ''}`;
+  }
+  
+  if (diasParaVencer <= 7) {
+    return `⏰ Vence en ${diasParaVencer} día${diasParaVencer !== 1 ? 's' : ''}`;
+  }
+  
+  if (diasParaVencer <= 30) {
+    return `⏳ ${diasParaVencer} días`;
+  }
+  
+  const fecha = new Date(fechaVencimiento);
+  return `✓ ${fecha.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+}
+
 function subUbicTipoIcon(tipo: string) {
   if (tipo === "freezer")  return <Snowflake    className="h-5 w-5 text-blue-500" />;
   if (tipo === "heladera") return <Refrigerator className="h-5 w-5 text-teal-500" />;
@@ -78,6 +114,8 @@ function SubUbicPanel({ title, tipo, rows }: { title: string; tipo: string; rows
   const totalUnidades = rows.reduce((s, r) => s + r.cantidad, 0);
   const bajoStock     = rows.filter((r) => r.cantidad > 0 && r.cantidad < 10).length;
   const sinStock      = rows.filter((r) => r.cantidad <= 0).length;
+  const vencidos      = rows.filter((r) => r.dias_para_vencer !== null && r.dias_para_vencer <= 0).length;
+  const porVencer     = rows.filter((r) => r.dias_para_vencer !== null && r.dias_para_vencer > 0 && r.dias_para_vencer <= 30).length;
 
   return (
     <Card className={clsx("overflow-hidden", !open && "shadow-sm")}>
@@ -98,6 +136,12 @@ function SubUbicPanel({ title, tipo, rows }: { title: string; tipo: string; rows
               <span>{rows.length} productos</span>
               <span>·</span>
               <span>{totalUnidades} unidades</span>
+              {vencidos > 0 && (
+                <span className="text-red-600 font-medium">⚠️ {vencidos} vencido{vencidos !== 1 ? 's' : ''}</span>
+              )}
+              {porVencer > 0 && (
+                <span className="text-orange-500 font-medium">⏰ {porVencer} por vencer</span>
+              )}
               {bajoStock > 0 && <span className="text-orange-500 font-medium">⚠ {bajoStock} bajo stock</span>}
               {sinStock  > 0 && <span className="text-red-500 font-medium">✕ {sinStock} sin stock</span>}
             </div>
@@ -114,8 +158,10 @@ function SubUbicPanel({ title, tipo, rows }: { title: string; tipo: string; rows
             <TableHeader>
               <TableRow>
                 <TableHead>Producto</TableHead>
+                <TableHead>Sub-ubicación</TableHead>
                 <TableHead className="text-center">Tipo</TableHead>
                 <TableHead className="text-right">Cantidad</TableHead>
+                <TableHead>Vencimiento</TableHead>
                 <TableHead>Última act.</TableHead>
               </TableRow>
             </TableHeader>
@@ -123,7 +169,18 @@ function SubUbicPanel({ title, tipo, rows }: { title: string; tipo: string; rows
               {rows.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
-                    <span className="font-medium text-neutral-900">{item.producto_nombre}</span>
+                    <div>
+                      <span className="font-medium text-neutral-900">{item.producto_nombre}</span>
+                      {item.lote && (
+                        <div className="text-xs text-neutral-500 mt-0.5">Lote: {item.lote}</div>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5 text-sm text-neutral-500">
+                      <MapPin className="h-3 w-3" />
+                      {item.sub_ubicacion_nombre}
+                    </div>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant={tipoBadgeVariant(item.producto_tipo_conservacion)}>
@@ -138,6 +195,23 @@ function SubUbicPanel({ title, tipo, rows }: { title: string; tipo: string; rows
                     <span className={clsx("font-bold text-lg", stockColor(item.cantidad))}>
                       {item.cantidad}
                     </span>
+                  </TableCell>
+                  <TableCell>
+                    {item.fecha_vencimiento && item.dias_para_vencer !== null ? (
+                      <div className="flex items-center justify-start">
+                        <Badge 
+                          variant={vencimientoBadgeVariant(vencimientoEstado(item.dias_para_vencer))}
+                          className={clsx(
+                            "text-xs",
+                            vencimientoEstado(item.dias_para_vencer) === "vencido" && "bg-red-100 text-red-800 border-red-300"
+                          )}
+                        >
+                          {vencimientoTexto(item.dias_para_vencer, item.fecha_vencimiento)}
+                        </Badge>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-neutral-400">—</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5 text-xs text-neutral-400">
@@ -404,6 +478,8 @@ export default function AdminStockView() {
             const total    = rows.reduce((s, r) => s + r.cantidad, 0);
             const bajo     = rows.filter((r) => r.cantidad > 0 && r.cantidad < 10).length;
             const sinSt    = rows.filter((r) => r.cantidad <= 0).length;
+            const vencidos = rows.filter((r) => r.dias_para_vencer !== null && r.dias_para_vencer <= 0).length;
+            const porVencer = rows.filter((r) => r.dias_para_vencer !== null && r.dias_para_vencer > 0 && r.dias_para_vencer <= 30).length;
             const isAlmacen = suc.tipo === "almacen";
 
             return (
@@ -441,8 +517,14 @@ export default function AdminStockView() {
                   </span>
                 </div>
 
-                {(bajo > 0 || sinSt > 0) && (
-                  <div className="flex items-center gap-3 mt-2 text-xs">
+                {(vencidos > 0 || porVencer > 0 || bajo > 0 || sinSt > 0) && (
+                  <div className="flex flex-wrap items-center gap-2 mt-2 text-xs">
+                    {vencidos > 0 && (
+                      <span className="text-red-600 font-medium">⚠️ {vencidos} vencido{vencidos !== 1 ? 's' : ''}</span>
+                    )}
+                    {porVencer > 0 && (
+                      <span className="text-orange-500 font-medium">⏰ {porVencer} por vencer</span>
+                    )}
                     {bajo  > 0 && <span className="text-orange-500 font-medium">⚠ {bajo} bajo stock</span>}
                     {sinSt > 0 && <span className="text-red-500   font-medium">✕ {sinSt} sin stock</span>}
                   </div>
