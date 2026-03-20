@@ -1,7 +1,7 @@
 import { apiFetch } from "./http";
 
 export type PedidoEstado = "borrador" | "pendiente" | "aprobado" | "rechazado" | "recibido";
-export type OrigenTipo = "distribuidor" | "sucursal";
+export type OrigenTipo = "distribuidor" | "sucursal" | "mixto";
 
 export type PedidoItem = {
   id: number;
@@ -11,6 +11,11 @@ export type PedidoItem = {
   precio_costo_momento: string;
   sub_ubicacion_destino: number | null;
   sub_ubicacion_origen: number | null;
+  sub_ubicaciones_origen_detalle?: Array<{
+    sub_ubicacion_id: number;
+    sub_ubicacion_nombre: string;
+    cantidad: number;
+  }> | null;
 };
 
 export type Pedido = {
@@ -50,13 +55,15 @@ export type PedidoRecibirBody = {
 
 export type PedidoAprobarItem = {
   id: number;
+  origen_tipo?: 'distribuidor' | 'sucursal';
+  origen_sucursal?: number;
   sub_ubicacion_origen?: number; // legacy - single sub-ubicación
   sub_ubicaciones_origen?: { sub_ubicacion: number; cantidad: number; }[]; // new - multiple sub-ubicaciones
 };
 
 export type PedidoAprobarBody = {
-  origen_tipo: OrigenTipo;
-  origen_sucursal?: number;
+  origen_tipo?: OrigenTipo; // legacy - para compatibilidad con formato antiguo
+  origen_sucursal?: number; // legacy - para compatibilidad con formato antiguo
   items?: PedidoAprobarItem[];
 };
 

@@ -72,20 +72,24 @@ export default function Orders() {
   const [showCancelarConfirm, setShowCancelarConfirm] = useState(false);
   const [pedidoAction, setPedidoAction] = useState<number | null>(null);
 
-  // Estados para aprobación con selección de almacén
-  const [showAprobarOrigenModal, setShowAprobarOrigenModal] = useState(false);
-  const [showAprobarAlmacenModal, setShowAprobarAlmacenModal] = useState(false);
-  const [showAprobarSucursalModal, setShowAprobarSucursalModal] = useState(false);
+  // Estados para aprobación mixta (nuevo sistema)
+  const [showAprobarMixtoModal, setShowAprobarMixtoModal] = useState(false);
+  const [aprobarMixtoErr, setAprobarMixtoErr] = useState<string | null>(null);
   const [pedidoToApprove, setPedidoToApprove] = useState<Pedido | null>(null);
-  const [almacenUbicaciones, setAlmacenUbicaciones] = useState<Record<number, number>>({}); // pedidoitem_id -> sub_ubicacion_id
-  const [almacenesDisponibles, setAlmacenesDisponibles] = useState<Sucursal[]>([]); // ubicaciones tipo almacen
-  const [almacenStock, setAlmacenStock] = useState<StockItem[]>([]); // stock actual del almacén
-  
-  // Estados para aprobación desde sucursal
+  const [sucursalesDisponibles, setSucursalesDisponibles] = useState<Sucursal[]>([]);
   const [disponibilidadSucursales, setDisponibilidadSucursales] = useState<DisponibilidadSucursal[]>([]);
-  const [sucursalOrigenSeleccionada, setSucursalOrigenSeleccionada] = useState<number | null>(null);
-  const [sucursalOrigenStock, setSucursalOrigenStock] = useState<StockItem[]>([]);
-  const [sucursalUbicaciones, setSucursalUbicaciones] = useState<Record<number, Array<{sub_ubicacion: number, cantidad: number}>>>({}); // itemId -> [{sub_ubicacion, cantidad}]
+  const [itemOrigenConfig, setItemOrigenConfig] = useState<Record<number, {
+    tipo: 'distribuidor' | 'sucursal';
+    sucursalOrigen?: number;
+    sucursalNombre?: string;
+    subUbicaciones: Array<{
+      sub_ubicacion: number;
+      nombre: string;
+      cantidad: number;
+      stockDisponible: number;
+    }>;
+  }>>({});
+  const [stockPorSucursal, setStockPorSucursal] = useState<Record<number, StockItem[]>>({});
 
   // Estados para edición de pedido
   const [showEdit, setShowEdit] = useState(false);
@@ -367,45 +371,41 @@ export default function Orders() {
     }
   }
 
-  function onAprobar(id: number) {
-    // En lugar de abrir directamente el confirm, primero cargamos el pedido completo
-    const pedido = pedidos.find(p => p.id === id);
-    if (pedido) {
-      setPedidoToApprove(pedido);
-      setShowAprobarOrigenModal(true);
-    }
-  }
+  async function onAprobar(id: number) {
+    // Abrir modal de aprobación mixta
+    setBusy(true);
+    setErr(null);
+    setAprobarMixtoErr(null);
 
-  async function handleAprobarDesdeAlmacen() {
-    // Usuario elige proveer desde almacén, abrir modal para seleccionar sububicaciones
-    setShowAprobarOrigenModal(false);
-    if (!pedidoToApprove) return;
-    
     try {
-      setBusy(true);
-      // Cargar el pedido completo con items
-      const pedidoCompleto = await getPedido(pedidoToApprove.id);
-      setPedidoToApprove(pedidoCompleto);
-      
-      // Filtrar las ubicaciones de tipo 'almacen' ya cargadas
-      const almacenes = sucursales.filter(s => s.tipo === 'almacen');
-      if (almacenes.length === 0) {
-        setErr("No hay ninguna ubicación de tipo 'Almacén Central' registrada. Creala primero desde la sección Ubicaciones.");
-        setBusy(false);
-        setShowAprobarOrigenModal(true); // reabrimos para que no quede en blanco
-        return;
-      }
-      setAlmacenesDisponibles(almacenes);
-      
-      // Cargar el stock actual del almacén para mostrar disponibilidad
-      const stockResults = await Promise.all(
-        almacenes.map(a => listStock({ ubicacion: a.id }))
+      const pedido = await getPedido(id);
+      setPedidoToApprove(pedido);
+
+      // Obtener disponibilidad real (sumatoria de sub-ubicaciones por sucursal y producto)
+      const disponibilidad = await getDisponibilidadSucursales(id);
+      setDisponibilidadSucursales(disponibilidad);
+
+      // Cargar catálogo de sucursales disponibles (almacenes + sucursales)
+      const todasSucursales = sucursales.filter(s =>
+        s.tipo === 'almacen' || s.tipo === 'sucursal'
       );
-      setAlmacenStock(stockResults.flat());
-      
-      // Inicializar almacenUbicaciones vacío
-      setAlmacenUbicaciones({});
-      setShowAprobarAlmacenModal(true);
+
+      // Mantener solo sucursales que devuelve el endpoint de disponibilidad
+      const idsDisponibles = new Set(disponibilidad.map(d => d.sucursal_id));
+      const catalogoDisponibilidad = todasSucursales.filter(s => idsDisponibles.has(s.id));
+      setSucursalesDisponibles(catalogoDisponibilidad.length > 0 ? catalogoDisponibilidad : todasSucursales);
+
+      // Inicializar configuración: todos default a 'distribuidor'
+      const configInicial: typeof itemOrigenConfig = {};
+      pedido.items.forEach(item => {
+        configInicial[item.id] = {
+          tipo: 'distribuidor',
+          subUbicaciones: []
+        };
+      });
+      setItemOrigenConfig(configInicial);
+
+      setShowAprobarMixtoModal(true);
     } catch (e: any) {
       setErr(e?.message ?? "Error cargando pedido");
     } finally {
@@ -413,170 +413,285 @@ export default function Orders() {
     }
   }
 
-  async function handleAprobarDesdeSucursal() {
-    // Usuario elige proveer desde otra sucursal
-    setShowAprobarOrigenModal(false);
-    if (!pedidoToApprove) return;
-    
-    try {
-      setBusy(true);
-      // Cargar disponibilidad de sucursales para este pedido
-      const disponibilidad = await getDisponibilidadSucursales(pedidoToApprove.id);
-      setDisponibilidadSucursales(disponibilidad);
-      
-      // Cargar el pedido completo
-      const pedidoCompleto = await getPedido(pedidoToApprove.id);
-      setPedidoToApprove(pedidoCompleto);
-      
-      setSucursalOrigenSeleccionada(null);
-      setSucursalUbicaciones({});
-      setShowAprobarSucursalModal(true);
-    } catch (e: any) {
-      setErr(e?.message ?? "Error cargando disponibilidad");
-      setShowAprobarOrigenModal(true);
-    } finally {
-      setBusy(false);
+  // ============================================================================
+  // HANDLERS PARA APROBACIÓN MIXTA
+  // ============================================================================
+
+  function handleCambiarOrigenItem(itemId: number, tipo: 'distribuidor' | 'sucursal') {
+    setItemOrigenConfig(prev => ({
+      ...prev,
+      [itemId]: {
+        tipo,
+        subUbicaciones: tipo === 'distribuidor' ? [] : (prev[itemId]?.subUbicaciones || [])
+      }
+    }));
+
+    // Si cambia a distribuidor, limpiar configuración de sucursal
+    if (tipo === 'distribuidor') {
+      setItemOrigenConfig(prev => {
+        const config = { ...prev };
+        delete config[itemId]?.sucursalOrigen;
+        delete config[itemId]?.sucursalNombre;
+        return config;
+      });
     }
   }
 
-  async function handleSucursalOrigenChange(sucursalId: number) {
-    setSucursalOrigenSeleccionada(sucursalId);
-    setSucursalUbicaciones({});
-    
-    try {
-      // Cargar el stock de la sucursal seleccionada
-      const stock = await listStock({ ubicacion: sucursalId });
-      setSucursalOrigenStock(stock);
-    } catch (e: any) {
-      setErr(e?.message ?? "Error cargando stock de sucursal");
+  async function handleSeleccionarSucursalOrigenItem(itemId: number, sucursalId: number) {
+    setAprobarMixtoErr(null);
+
+    if (!sucursalId) {
+      setItemOrigenConfig(prev => ({
+        ...prev,
+        [itemId]: {
+          ...prev[itemId],
+          sucursalOrigen: undefined,
+          sucursalNombre: undefined,
+          subUbicaciones: []
+        }
+      }));
+      return;
+    }
+
+    const item = pedidoToApprove?.items.find(i => i.id === itemId);
+    const disponibilidadItem = disponibilidadSucursales
+      .find(d => d.sucursal_id === sucursalId)
+      ?.productos.find(p => p.producto_id === item?.producto);
+
+    if (disponibilidadItem && !disponibilidadItem.suficiente) {
+      setAprobarMixtoErr(`Stock insuficiente en la sucursal seleccionada para ${item?.producto_nombre}`);
+      return;
+    }
+
+    const sucursal = sucursales.find(s => s.id === sucursalId);
+
+    setItemOrigenConfig(prev => ({
+      ...prev,
+      [itemId]: {
+        ...prev[itemId],
+        sucursalOrigen: sucursalId,
+        sucursalNombre: sucursal?.nombre || '',
+        subUbicaciones: []
+      }
+    }));
+
+    // Cargar stock de esta sucursal si aún no está cargado
+    if (!stockPorSucursal[sucursalId]) {
+      try {
+        const stock = await listStock({ ubicacion: sucursalId, solo_con_stock: true });
+        setStockPorSucursal(prev => ({
+          ...prev,
+          [sucursalId]: stock
+        }));
+      } catch (e: any) {
+        setAprobarMixtoErr(e?.message ?? "Error cargando stock de sucursal");
+      }
     }
   }
 
-  async function handleAprobarExtern() {
-    // Usuario elige proveer externamente (distribuidor)
-    setShowAprobarOrigenModal(false);
+  function getSubUbicacionesConStockParaItem(itemId: number): Array<{
+    sub_ubicacion: number;
+    nombre: string;
+    stockDisponible: number;
+  }> {
+    const config = itemOrigenConfig[itemId];
+    const item = pedidoToApprove?.items.find(i => i.id === itemId);
+    if (!config?.sucursalOrigen || !item) return [];
+
+    const stockItemSucursal = (stockPorSucursal[config.sucursalOrigen] || [])
+      .filter(s => s.producto === item.producto && s.cantidad > 0);
+
+    const acumuladoPorSubUbicacion = new Map<number, { nombre: string; stockDisponible: number }>();
+
+    stockItemSucursal.forEach(registro => {
+      const actual = acumuladoPorSubUbicacion.get(registro.sub_ubicacion);
+      if (actual) {
+        actual.stockDisponible += registro.cantidad;
+      } else {
+        acumuladoPorSubUbicacion.set(registro.sub_ubicacion, {
+          nombre: registro.sub_ubicacion_nombre,
+          stockDisponible: registro.cantidad
+        });
+      }
+    });
+
+    return Array.from(acumuladoPorSubUbicacion.entries()).map(([sub_ubicacion, info]) => ({
+      sub_ubicacion,
+      nombre: info.nombre,
+      stockDisponible: info.stockDisponible
+    }));
+  }
+
+  function handleAgregarSubUbicacionItem(itemId: number) {
+    setAprobarMixtoErr(null);
+
+    const config = itemOrigenConfig[itemId];
+    if (!config?.sucursalOrigen) return;
+
+    const item = pedidoToApprove?.items.find(i => i.id === itemId);
+    if (!item) return;
+
+    // Obtener stock consolidado por sub-ubicación para este producto
+    const stockDisponible = getSubUbicacionesConStockParaItem(itemId);
+
+    if (stockDisponible.length === 0) {
+      setAprobarMixtoErr(`No hay sub-ubicaciones con stock de ${item.producto_nombre} en ${config.sucursalNombre}`);
+      return;
+    }
+
+    // Agregar la primera sub-ubicación disponible que no esté ya agregada
+    const subUbicacionesYaAgregadas = config.subUbicaciones.map(u => u.sub_ubicacion);
+    const subUbicacionDisponible = stockDisponible.find(s =>
+      !subUbicacionesYaAgregadas.includes(s.sub_ubicacion)
+    );
+
+    if (!subUbicacionDisponible) {
+      setAprobarMixtoErr("No hay más sub-ubicaciones disponibles para agregar");
+      return;
+    }
+
+    setItemOrigenConfig(prev => ({
+      ...prev,
+      [itemId]: {
+        ...prev[itemId],
+        subUbicaciones: [
+          ...prev[itemId].subUbicaciones,
+          {
+            sub_ubicacion: subUbicacionDisponible.sub_ubicacion,
+            nombre: subUbicacionDisponible.nombre || `Sub-ub ${subUbicacionDisponible.sub_ubicacion}`,
+            cantidad: 0,
+            stockDisponible: subUbicacionDisponible.stockDisponible
+          }
+        ]
+      }
+    }));
+  }
+
+  function handleCambiarCantidadSubUbicacionItem(itemId: number, subUbIndex: number, cantidadStr: string) {
+    const cantidad = parseInt(cantidadStr) || 0;
+
+    setItemOrigenConfig(prev => {
+      const config = { ...prev };
+      if (config[itemId] && config[itemId].subUbicaciones[subUbIndex]) {
+        config[itemId].subUbicaciones[subUbIndex].cantidad = cantidad;
+      }
+      return config;
+    });
+  }
+
+  function handleQuitarSubUbicacionItem(itemId: number, subUbIndex: number) {
+    setItemOrigenConfig(prev => {
+      const config = { ...prev };
+      if (config[itemId]) {
+        config[itemId].subUbicaciones.splice(subUbIndex, 1);
+      }
+      return config;
+    });
+  }
+
+  function validarConfiguracionCompleta(): boolean {
+    if (!pedidoToApprove) return false;
+
+    for (const item of pedidoToApprove.items) {
+      const config = itemOrigenConfig[item.id];
+
+      if (!config) return false;
+
+      if (config.tipo === 'sucursal') {
+        // Validar que tenga sucursal origen seleccionada
+        if (!config.sucursalOrigen) return false;
+
+        // Validar que tenga sub-ubicaciones asignadas
+        if (!config.subUbicaciones || config.subUbicaciones.length === 0) return false;
+
+        // Validar que la suma de cantidades sea correcta
+        const totalAsignado = config.subUbicaciones.reduce((sum, ub) => sum + ub.cantidad, 0);
+        if (totalAsignado !== item.cantidad) return false;
+
+        // Validar que cada sub-ubicación tenga stock suficiente
+        const tieneStockInsuficiente = config.subUbicaciones.some(ub => ub.cantidad > ub.stockDisponible);
+        if (tieneStockInsuficiente) return false;
+      }
+    }
+
+    return true;
+  }
+
+  async function handleConfirmarAprobacionMixta() {
     if (!pedidoToApprove) return;
-    
+
     setBusy(true);
     setErr(null);
+    setAprobarMixtoErr(null);
+
     try {
-      await aprobarPedido(pedidoToApprove.id, { origen_tipo: 'distribuidor' });
+      // Construir payload para backend
+      const items = pedidoToApprove.items.map(item => {
+        const config = itemOrigenConfig[item.id];
+
+        if (config.tipo === 'distribuidor') {
+          return {
+            id: item.id,
+            origen_tipo: 'distribuidor'
+          };
+        } else {
+          return {
+            id: item.id,
+            origen_tipo: 'sucursal',
+            origen_sucursal: config.sucursalOrigen,
+            sub_ubicaciones_origen: config.subUbicaciones.map(ub => ({
+              sub_ubicacion: ub.sub_ubicacion,
+              cantidad: ub.cantidad
+            }))
+          };
+        }
+      });
+
+      // Aprobar pedido
+      await aprobarPedido(pedidoToApprove.id, { items });
+
+      // Recargar datos
       await loadData();
-      
-      // Generar y descargar PDF automáticamente
-      try {
-        const pedidoCompleto = await getPedido(pedidoToApprove.id);
-        const sucursalNombre = sucursales.find(s => s.id === pedidoCompleto.destino)?.nombre;
-        const { blob, fileName } = generarOrdenCompraPDF({ 
-          pedido: pedidoCompleto, 
-          sucursalDestino: sucursalNombre 
+
+      // Generar PDF solo con items de distribuidor
+      const itemsDistribuidor = pedidoToApprove.items.filter(item =>
+        itemOrigenConfig[item.id]?.tipo === 'distribuidor'
+      );
+
+      if (itemsDistribuidor.length > 0) {
+        const pedidoParaPDF = { ...pedidoToApprove, items: itemsDistribuidor };
+        const sucursalNombre = sucursales.find(s => s.id === pedidoToApprove.destino)?.nombre;
+        const { blob, fileName } = generarOrdenCompraPDF({
+          pedido: pedidoParaPDF,
+          sucursalDestino: sucursalNombre
         });
         descargarPDF(blob, fileName);
-      } catch (pdfError) {
-        console.error('Error generando PDF:', pdfError);
       }
+
+      // Cerrar modal y limpiar
+      setShowAprobarMixtoModal(false);
+      setItemOrigenConfig({});
+      setPedidoToApprove(null);
+
     } catch (e: any) {
-      setErr(e?.message ?? "Error aprobando pedido");
+      setAprobarMixtoErr(e?.message ?? "Error aprobando pedido");
     } finally {
       setBusy(false);
-      setPedidoToApprove(null);
     }
   }
 
-  async function confirmAprobarDesdeAlmacen() {
-    if (!pedidoToApprove) return;
-    
-    // Validar que todos los items tengan sub_ubicacion_origen asignada
-    const itemsSinUbicacion = pedidoToApprove.items.filter(item => !almacenUbicaciones[item.id]);
-    if (itemsSinUbicacion.length > 0) {
-      setErr("Debes asignar una sub-ubicación del almacén para todos los productos");
-      return;
-    }
-    
-    // Elegir cualquier almacén disponible (asumimos que es el mismo para todos)
-    const primerAlmacen = almacenesDisponibles[0];
-    if (!primerAlmacen) {
-      setErr("No se encontró el almacén");
-      return;
-    }
-    
-    setBusy(true);
+  function handleCerrarModalMixto() {
+    setShowAprobarMixtoModal(false);
+    setItemOrigenConfig({});
+    setDisponibilidadSucursales([]);
+    setAprobarMixtoErr(null);
+    setPedidoToApprove(null);
     setErr(null);
-    setShowAprobarAlmacenModal(false);
-    try {
-      const items = pedidoToApprove.items.map(item => ({
-        id: item.id,
-        sub_ubicacion_origen: almacenUbicaciones[item.id]
-      }));
-      
-      await aprobarPedido(pedidoToApprove.id, {
-        origen_tipo: 'sucursal',
-        origen_sucursal: primerAlmacen.id,
-        items
-      });
-      
-      await loadData();
-    } catch (e: any) {
-      setErr(e?.message ?? "Error aprobando pedido");
-      setShowAprobarAlmacenModal(true);
-    } finally {
-      setBusy(false);
-      setPedidoToApprove(null);
-      setAlmacenUbicaciones({});
-    }
   }
 
-  async function confirmAprobarDesdeSucursal() {
-    if (!pedidoToApprove || !sucursalOrigenSeleccionada) return;
-    
-    // Validar que todos los items tengan sub-ubicaciones asignadas
-    const itemsSinUbicacion = pedidoToApprove.items.filter(item => {
-      const ubicaciones = sucursalUbicaciones[item.id];
-      return !ubicaciones || ubicaciones.length === 0;
-    });
-    
-    if (itemsSinUbicacion.length > 0) {
-      setErr("Debes asignar al menos una sub-ubicación de origen para todos los productos");
-      return;
-    }
-    
-    // Validar que las cantidades sumen correctamente
-    for (const item of pedidoToApprove.items) {
-      const ubicaciones = sucursalUbicaciones[item.id];
-      const totalAsignado = ubicaciones.reduce((sum, u) => sum + u.cantidad, 0);
-      
-      if (totalAsignado !== item.cantidad) {
-        setErr(`El producto "${item.producto_nombre}" requiere ${item.cantidad} unidades pero se asignaron ${totalAsignado}`);
-        return;
-      }
-    }
-    
-    setBusy(true);
-    setErr(null);
-    setShowAprobarSucursalModal(false);
-    try {
-      const items = pedidoToApprove.items.map(item => ({
-        id: item.id,
-        sub_ubicaciones_origen: sucursalUbicaciones[item.id]
-      }));
-      
-      await aprobarPedido(pedidoToApprove.id, {
-        origen_tipo: 'sucursal',
-        origen_sucursal: sucursalOrigenSeleccionada,
-        items
-      });
-      
-      await loadData();
-    } catch (e: any) {
-      setErr(e?.message ?? "Error aprobando pedido");
-      setShowAprobarSucursalModal(true);
-    } finally {
-      setBusy(false);
-      setPedidoToApprove(null);
-      setSucursalUbicaciones({});
-      setSucursalOrigenSeleccionada(null);
-    }
-  }
+  // ============================================================================
+  // FIN HANDLERS APROBACIÓN MIXTA
+  // ============================================================================
 
   function onRechazar(id: number) {
     setPedidoAction(id);
@@ -1368,11 +1483,20 @@ export default function Orders() {
                           {estadoLabels[pedido.estado as keyof typeof estadoLabels]}
                         </Badge>
                         {pedido.origen_tipo && (pedido.estado === 'aprobado' || pedido.estado === 'recibido') && (
-                          <Badge 
-                            variant={pedido.origen_tipo === 'distribuidor' ? 'info' : 'pending'} 
-                            title={pedido.origen_tipo === 'distribuidor' ? 'Provisto por proveedor externo' : `Provisto desde ${pedido.origen_sucursal_nombre}`}
+                          <Badge
+                            variant={
+                              pedido.origen_tipo === 'mixto' ? 'warning' :
+                              pedido.origen_tipo === 'distribuidor' ? 'info' : 'pending'
+                            }
+                            title={
+                              pedido.origen_tipo === 'mixto' ? 'Pedido mixto: algunos productos de distribuidor, otros de sucursal' :
+                              pedido.origen_tipo === 'distribuidor' ? 'Provisto por proveedor externo' :
+                              `Provisto desde ${pedido.origen_sucursal_nombre}`
+                            }
                           >
-                            {pedido.origen_tipo === 'distribuidor' ? 'Proveedor' : pedido.origen_sucursal_nombre}
+                            {pedido.origen_tipo === 'mixto' ? 'Mixto' :
+                             pedido.origen_tipo === 'distribuidor' ? 'Proveedor' :
+                             pedido.origen_sucursal_nombre}
                           </Badge>
                         )}
                       </div>
@@ -1431,7 +1555,31 @@ export default function Orders() {
                           </button>
                         )}
                       </div>
-                      
+
+                      {/* Mostrar origen por item para pedidos mixtos expandidos */}
+                      {pedido.origen_tipo === 'mixto' && expandedPedidos.has(pedido.id) && (
+                        <div className="mt-3 pt-3 border-t border-neutral-200">
+                          <div className="text-xs font-medium text-neutral-700 mb-2">Origen por producto:</div>
+                          <div className="space-y-1">
+                            {pedido.items.map(item => {
+                              const esDistribuidor = !item.sub_ubicaciones_origen_detalle ||
+                                                     (Array.isArray(item.sub_ubicaciones_origen_detalle) && item.sub_ubicaciones_origen_detalle.length === 0);
+                              return (
+                                <div key={item.id} className="flex items-center justify-between text-xs bg-neutral-50 px-2 py-1 rounded">
+                                  <span className="text-neutral-600">{item.producto_nombre}</span>
+                                  <Badge
+                                    size="sm"
+                                    variant={esDistribuidor ? "info" : "success"}
+                                  >
+                                    {esDistribuidor ? "Distribuidor" : "Sucursal"}
+                                  </Badge>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="pt-2 border-t border-neutral-100 flex justify-between text-sm font-semibold">
                         <span>Total:</span>
                         <span className="text-primary-700">
@@ -1560,393 +1708,216 @@ export default function Orders() {
         </Card>
       )}
 
-      {/* Modal: Elegir origen del pedido (almacén vs sucursal vs externo) */}
+      {/* ===================================================================== */}
+      {/* MODAL: APROBACIÓN MIXTA (NUEVO) */}
+      {/* ===================================================================== */}
       <Modal
-        open={showAprobarOrigenModal}
-        onClose={() => {
-          setShowAprobarOrigenModal(false);
-          setPedidoToApprove(null);
-        }}
-        title="Aprobar pedido"
-        description={`¿Cómo se proveerá el Pedido #${pedidoToApprove?.id}?`}
-        size="sm"
-      >
-        <div className="space-y-3 py-2">
-          <button
-            onClick={handleAprobarDesdeSucursal}
-            disabled={busy}
-            className="w-full flex items-start gap-4 p-4 border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 rounded-xl transition-colors text-left"
-          >
-            <div className="p-2 bg-amber-100 rounded-lg mt-0.5">
-              <MapPin className="h-5 w-5 text-amber-600" />
-            </div>
-            <div>
-              <div className="font-semibold text-amber-800">Desde otra sucursal</div>
-              <div className="text-sm text-amber-600">Se descuenta stock de otra sucursal que tenga disponibilidad</div>
-            </div>
-          </button>
-
-          <button
-            onClick={handleAprobarExtern}
-            disabled={busy}
-            className="w-full flex items-start gap-4 p-4 border-2 border-primary-300 bg-primary-50 hover:bg-primary-100 rounded-xl transition-colors text-left"
-          >
-            <div className="p-2 bg-primary-100 rounded-lg mt-0.5">
-              <Send className="h-5 w-5 text-primary-600" />
-            </div>
-            <div>
-              <div className="font-semibold text-primary-800">Externo (distribuidor)</div>
-              <div className="text-sm text-primary-600">No afecta el stock, el pedido se gestiona con el proveedor externo</div>
-            </div>
-          </button>
-        </div>
-      </Modal>
-
-      {/* Modal: Seleccionar sub-ubicación de origen del almacén */}
-      <Modal
-        open={showAprobarAlmacenModal}
-        onClose={() => {
-          setShowAprobarAlmacenModal(false);
-          setPedidoToApprove(null);
-          setAlmacenUbicaciones({});
-          setAlmacenesDisponibles([]);
-          setAlmacenStock([]);
-        }}
-        title="Asignar origen desde almacén"
-        description="Indicá desde qué sub-ubicación del almacén se tomará cada producto"
-        size="lg"
+        open={showAprobarMixtoModal}
+        onClose={handleCerrarModalMixto}
+        title={`Aprobar Pedido #${pedidoToApprove?.id}`}
+        description={`Destino: ${pedidoToApprove?.destino_nombre || 'Sucursal'}`}
+        size="xl"
       >
         {pedidoToApprove && (
           <div className="space-y-4">
-            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-              <div className="text-sm font-medium text-emerald-800">
-                Pedido #{pedidoToApprove.id} → {pedidoToApprove.destino_nombre}
+            {/* Info del pedido */}
+            <div className="bg-primary-50 border border-primary-200 rounded-lg p-3">
+              <div className="text-sm font-medium text-primary-800">
+                Selecciona el origen para cada producto
               </div>
-              <div className="text-xs text-emerald-600 mt-0.5">
-                Asigná una sub-ubicación del almacén para cada producto
+              <div className="text-xs text-primary-600 mt-0.5">
+                Puedes combinar productos del distribuidor con productos de una sucursal
               </div>
             </div>
 
-            <div className="space-y-3">
-              {pedidoToApprove.items.map((item) => {
-                // Buscar stock disponible en cada sub-ubicación para este producto
-                const stockPorSubUbicacion = Object.fromEntries(
-                  almacenStock
-                    .filter(s => s.producto === item.producto)
-                    .map(s => [s.sub_ubicacion, s.cantidad])
-                );
-                const subUbicSelected = almacenUbicaciones[item.id];
-                const stockDisponible = subUbicSelected ? (stockPorSubUbicacion[subUbicSelected] ?? 0) : null;
-                const stockInsuficiente = stockDisponible !== null && stockDisponible < item.cantidad;
+            {aprobarMixtoErr && (
+              <Alert variant="error">
+                {aprobarMixtoErr}
+              </Alert>
+            )}
 
-                return (
-                <div key={item.id} className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white p-3 sm:flex-row sm:items-center">
-                  <div className="flex-1">
-                    <div className="font-medium text-sm text-neutral-900">{item.producto_nombre}</div>
-                    <div className="text-xs text-neutral-500">Cantidad pedida: {item.cantidad}</div>
-                    {stockInsuficiente && (
-                      <div className="text-xs text-red-600 font-medium mt-0.5">
-                        ⚠️ Stock insuficiente (disponible: {stockDisponible})
-                      </div>
-                    )}
-                    {stockDisponible !== null && !stockInsuficiente && (
-                      <div className="text-xs text-emerald-600 font-medium mt-0.5">
-                        ✓ Disponible: {stockDisponible} unidades
-                      </div>
-                    )}
+            {/* Lista de items con selector de origen */}
+            {pedidoToApprove.items.map((item) => {
+              const config = itemOrigenConfig[item.id] || { tipo: 'distribuidor', subUbicaciones: [] };
+              const esDistribuidor = config.tipo === 'distribuidor';
+
+              return (
+                <div key={item.id} className="border border-neutral-200 rounded-lg p-4 space-y-3">
+                  {/* Cabecera del item */}
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="font-medium text-neutral-900">{item.producto_nombre}</div>
+                      <div className="text-sm text-neutral-500">Cantidad: {item.cantidad}</div>
+                    </div>
                   </div>
-                  <select
-                    value={almacenUbicaciones[item.id] ?? ""}
-                    onChange={(e) => setAlmacenUbicaciones(prev => ({
-                      ...prev,
-                      [item.id]: Number(e.target.value)
-                    }))}
-                    className={`w-full rounded-xl border bg-white px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent sm:w-auto sm:min-w-[240px] ${
-                      stockInsuficiente ? 'border-red-400' : 'border-neutral-300'
-                    }`}
-                  >
-                    <option value="">Sub-ubicación origen...</option>
-                    {almacenesDisponibles.map(almacen => (
-                      <optgroup key={almacen.id} label={almacen.nombre}>
-                        {almacen.sub_ubicaciones.map(sub => {
-                          const qty = stockPorSubUbicacion[sub.id] ?? 0;
-                          return (
-                            <option key={sub.id} value={sub.id}>
-                              {sub.nombre} ({sub.tipo}) — stock: {qty}
-                            </option>
-                          );
-                        })}
-                      </optgroup>
-                    ))}
-                  </select>
-                </div>
-              );})}
-            </div>
 
-            <ModalFooter>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setShowAprobarAlmacenModal(false);
-                  setPedidoToApprove(null);
-                  setAlmacenUbicaciones({});
-                  setAlmacenesDisponibles([]);
-                  setAlmacenStock([]);
-                }}
-                disabled={busy}
-              >
-                Cancelar
-              </Button>
-              <Button
-                variant="success"
-                onClick={confirmAprobarDesdeAlmacen}
-                disabled={busy || pedidoToApprove.items.some(item => {
-                  if (!almacenUbicaciones[item.id]) return true;
-                  const qty = almacenStock.find(
-                    s => s.producto === item.producto && s.sub_ubicacion === almacenUbicaciones[item.id]
-                  )?.cantidad ?? 0;
-                  return qty < item.cantidad;
-                })}
-                loading={busy}
-              >
-                <Check className="h-4 w-4" />
-                Aprobar y descontar almacén
-              </Button>
-            </ModalFooter>
-          </div>
-        )}
-      </Modal>
+                  {/* Selector de origen para este item */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-neutral-700">Origen</label>
+                    <select
+                      value={config.tipo}
+                      onChange={(e) => handleCambiarOrigenItem(item.id, e.target.value as 'distribuidor' | 'sucursal')}
+                      className="w-full px-3 py-2 rounded-xl border border-neutral-300 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value="distribuidor">Distribuidor / Proveedor</option>
+                      <option value="sucursal">Desde sucursal / almacén</option>
+                    </select>
+                  </div>
 
-      {/* Modal: Seleccionar sucursal origen y sub-ubicaciones */}
-      <Modal
-        open={showAprobarSucursalModal}
-        onClose={() => {
-          setShowAprobarSucursalModal(false);
-          setPedidoToApprove(null);
-          setSucursalUbicaciones({});
-          setSucursalOrigenSeleccionada(null);
-          setDisponibilidadSucursales([]);
-          setSucursalOrigenStock([]);
-        }}
-        title="Asignar origen desde sucursal"
-        description="Elegí la sucursal origen y asigná las sub-ubicaciones para cada producto"
-        size="lg"
-      >
-        {pedidoToApprove && (
-          <div className="space-y-4">
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <div className="text-sm font-medium text-amber-800">
-                Pedido #{pedidoToApprove.id} → {pedidoToApprove.destino_nombre}
-              </div>
-              <div className="text-xs text-amber-600 mt-0.5">
-                Seleccioná una sucursal que tenga stock disponible
-              </div>
-            </div>
+                  {/* Si es 'distribuidor', mostrar indicador */}
+                  {esDistribuidor && (
+                    <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700">
+                      ℹ️ Este producto se proveerá desde distribuidor externo (generará orden de compra)
+                    </div>
+                  )}
 
-            {/* Selector de sucursal origen */}
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-2">
-                Sucursal origen
-              </label>
-              <select
-                value={sucursalOrigenSeleccionada ?? ""}
-                onChange={(e) => handleSucursalOrigenChange(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-xl border text-sm bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent border-neutral-300"
-              >
-                <option value="">Seleccionar sucursal...</option>
-                {disponibilidadSucursales.map(disp => (
-                  <option
-                    key={disp.sucursal_id}
-                    value={disp.sucursal_id}
-                    disabled={!disp.puede_completar}
-                  >
-                    {disp.sucursal_nombre} {disp.puede_completar ? '✓' : '(stock insuficiente)'}
-                  </option>
-                ))}
-              </select>
-            </div>
+                  {/* Si es 'sucursal', mostrar interfaz de selección de sub-ubicaciones */}
+                  {!esDistribuidor && (
+                    <div className="space-y-3 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      {/* Selector de sucursal origen */}
+                      {!config.sucursalOrigen && (
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium text-amber-800">Seleccionar sucursal origen</label>
+                          <select
+                            onChange={(e) => handleSeleccionarSucursalOrigenItem(item.id, Number(e.target.value))}
+                            className="w-full px-3 py-2 rounded-xl border border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          >
+                            <option value="">-- Seleccionar sucursal --</option>
+                            {sucursalesDisponibles.map(suc => {
+                              const disponibilidadItem = disponibilidadSucursales
+                                .find(d => d.sucursal_id === suc.id)
+                                ?.productos.find(p => p.producto_id === item.producto);
 
-            {/* Si hay sucursal seleccionada, mostrar asignación por producto */}
-            {sucursalOrigenSeleccionada && (
-              <div className="space-y-4">
-                <div className="text-sm font-medium text-neutral-700">
-                  Asignar sub-ubicaciones para cada producto
-                </div>
-                {pedidoToApprove.items.map((item) => {
-                  const sucursalInfo = sucursales.find(s => s.id === sucursalOrigenSeleccionada);
-                  const stockPorSubUbicacion = Object.fromEntries(
-                    sucursalOrigenStock
-                      .filter(s => s.producto === item.producto)
-                      .map(s => [s.sub_ubicacion, s.cantidad])
-                  );
-                  
-                  const ubicacionesAsignadas = sucursalUbicaciones[item.id] || [];
-                  const totalAsignado = ubicacionesAsignadas.reduce((sum, u) => sum + u.cantidad, 0);
-                  const faltante = item.cantidad - totalAsignado;
-                  const cumple = faltante === 0;
+                              const cantidadDisponible = disponibilidadItem?.cantidad_disponible ?? 0;
+                              const suficiente = disponibilidadItem?.suficiente ?? false;
 
-                  return (
-                    <div key={item.id} className="p-4 bg-white border border-neutral-200 rounded-lg space-y-3">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="font-medium text-sm text-neutral-900">{item.producto_nombre}</div>
-                          <div className="text-xs text-neutral-500">Cantidad pedida: {item.cantidad}</div>
-                          <div className={`text-xs font-medium mt-1 ${ cumple ? 'text-emerald-600' : totalAsignado > item.cantidad ? 'text-red-600' : 'text-amber-600' }`}>
-                            {cumple ? (
-                              <>✓ Asignado completo: {totalAsignado}</>
-                            ) : totalAsignado > item.cantidad ? (
-                              <>⚠️ Excede en {totalAsignado - item.cantidad} unidades</>
-                            ) : (
-                              <>⚠️ Faltan {faltante} unidades</>
-                            )}
+                              return (
+                                <option
+                                  key={suc.id}
+                                  value={suc.id}
+                                  disabled={!suficiente}
+                                  className={!suficiente ? "text-neutral-400" : ""}
+                                >
+                                  {suc.nombre} ({suc.tipo}) - Stock: {cantidadDisponible}/{item.cantidad}
+                                  {!suficiente ? " - sin stock suficiente" : ""}
+                                </option>
+                              );
+                            })}
+                          </select>
+                          <div className="text-xs text-amber-700">
+                            Las sucursales sin stock suficiente aparecen en gris y no se pueden seleccionar.
                           </div>
                         </div>
-                      </div>
+                      )}
 
-                      {/* Lista de sub-ubicaciones asignadas */}
-                      {ubicacionesAsignadas.length > 0 && (
+                      {/* Si ya seleccionó sucursal, mostrar selector de sub-ubicaciones */}
+                      {config.sucursalOrigen && (
                         <div className="space-y-2">
-                          {ubicacionesAsignadas.map((ub, index) => {
-                            const subUbicInfo = sucursalInfo?.sub_ubicaciones.find(s => s.id === ub.sub_ubicacion);
-                            const stockDisp = stockPorSubUbicacion[ub.sub_ubicacion] ?? 0;
-                            const excedeStock = ub.cantidad > stockDisp;
-                            
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-medium text-amber-800">
+                              Asignar sub-ubicaciones de {config.sucursalNombre}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleSeleccionarSucursalOrigenItem(item.id, 0)}
+                              className="text-xs text-amber-600 hover:text-amber-700"
+                            >
+                              Cambiar sucursal
+                            </button>
+                          </div>
+
+                          {/* Lista de sub-ubicaciones asignadas */}
+                          {config.subUbicaciones.map((ub, index) => {
+                            const cantidadExcedida = ub.cantidad > ub.stockDisponible;
                             return (
-                              <div key={index} className={`flex flex-col gap-2 rounded border p-2 sm:flex-row sm:items-center ${excedeStock ? 'border-red-300 bg-red-50' : 'border-neutral-200'}`}>
+                              <div key={index} className={clsx(
+                                "flex items-center gap-2 border rounded p-2",
+                                cantidadExcedida ? "border-red-300 bg-red-50" : "border-amber-200 bg-white"
+                              )}>
                                 <div className="flex-1 text-xs">
-                                  <div className="font-medium">{subUbicInfo?.nombre} ({subUbicInfo?.tipo})</div>
-                                  <div className="text-neutral-500">Stock disponible: {stockDisp}</div>
-                                  {excedeStock && (
-                                    <div className="text-red-600 font-medium">⚠️ Cantidad excede stock disponible</div>
-                                  )}
+                                  <div className="font-medium">{ub.nombre}</div>
+                                  <div className={clsx(
+                                    "text-xs",
+                                    cantidadExcedida ? "text-red-600 font-medium" : "text-neutral-500"
+                                  )}>
+                                    Stock: {ub.stockDisponible} {cantidadExcedida && "⚠️ Insuficiente"}
+                                  </div>
                                 </div>
                                 <input
                                   type="number"
-                                  min="1"
-                                  max={stockDisp}
+                                  min="0"
+                                  max={ub.stockDisponible}
                                   value={ub.cantidad}
-                                  onChange={(e) => {
-                                    const newCantidad = parseInt(e.target.value) || 0;
-                                    setSucursalUbicaciones(prev => ({
-                                      ...prev,
-                                      [item.id]: prev[item.id].map((u, i) => 
-                                        i === index ? { ...u, cantidad: newCantidad } : u
-                                      )
-                                    }));
-                                  }}
-                                  className="w-20 px-2 py-1 rounded border text-sm border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                                  onChange={(e) => handleCambiarCantidadSubUbicacionItem(item.id, index, e.target.value)}
+                                  className={clsx(
+                                    "w-20 px-2 py-1 rounded border text-sm",
+                                    cantidadExcedida ? "border-red-400 bg-red-50" : "border-neutral-300"
+                                  )}
                                 />
                                 <button
-                                  onClick={() => {
-                                    setSucursalUbicaciones(prev => ({
-                                      ...prev,
-                                      [item.id]: prev[item.id].filter((_, i) => i !== index)
-                                    }));
-                                  }}
-                                  className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
-                                  title="Quitar"
+                                  type="button"
+                                  onClick={() => handleQuitarSubUbicacionItem(item.id, index)}
+                                  className="p-1 hover:bg-red-100 rounded"
                                 >
-                                  <X className="h-4 w-4" />
+                                  <X className="h-4 w-4 text-red-600" />
                                 </button>
                               </div>
                             );
                           })}
+
+                          {/* Botón agregar sub-ubicación */}
+                          <button
+                            type="button"
+                            onClick={() => handleAgregarSubUbicacionItem(item.id)}
+                            className="text-sm text-amber-600 hover:text-amber-700 font-medium"
+                          >
+                            + Agregar sub-ubicación
+                          </button>
+
+                          {/* Validación de cantidad total */}
+                          {config.subUbicaciones.length > 0 && (() => {
+                            const totalAsignado = config.subUbicaciones.reduce((sum, u) => sum + u.cantidad, 0);
+                            const falta = item.cantidad - totalAsignado;
+                            const sobra = totalAsignado - item.cantidad;
+
+                            return (
+                              <div className={clsx(
+                                "text-xs p-2 rounded",
+                                totalAsignado === item.cantidad
+                                  ? "bg-green-50 text-green-700"
+                                  : "bg-yellow-50 text-yellow-700"
+                              )}>
+                                {totalAsignado === item.cantidad ? (
+                                  <span>✓ Cantidad correcta asignada ({totalAsignado} de {item.cantidad})</span>
+                                ) : falta > 0 ? (
+                                  <span>⚠️ Faltan {falta} unidades por asignar</span>
+                                ) : (
+                                  <span>⚠️ Sobran {sobra} unidades</span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
-
-                      {/* Botón agregar sub-ubicación */}
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <select
-                          id={`select-sub-${item.id}`}
-                          className="flex-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                        >
-                          <option value="">Seleccionar sub-ubicación...</option>
-                          {sucursalInfo?.sub_ubicaciones
-                            .filter(sub => {
-                              // No mostrar las ya seleccionadas
-                              const yaSeleccionada = ubicacionesAsignadas.some(u => u.sub_ubicacion === sub.id);
-                              return !yaSeleccionada && (stockPorSubUbicacion[sub.id] ?? 0) > 0;
-                            })
-                            .map(sub => {
-                              const qty = stockPorSubUbicacion[sub.id] ?? 0;
-                              return (
-                                <option key={sub.id} value={sub.id}>
-                                  {sub.nombre} ({sub.tipo}) — stock: {qty}
-                                </option>
-                              );
-                            })}
-                        </select>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="w-full sm:w-auto"
-                          onClick={() => {
-                            const selectEl = document.getElementById(`select-sub-${item.id}`) as HTMLSelectElement;
-                            const subUbicacionId = Number(selectEl.value);
-                            
-                            if (!subUbicacionId) return;
-                            
-                            const stockDisp = stockPorSubUbicacion[subUbicacionId] ?? 0;
-                            const cantidadSugerida = Math.min(faltante, stockDisp);
-                            
-                            setSucursalUbicaciones(prev => ({
-                              ...prev,
-                              [item.id]: [
-                                ...(prev[item.id] || []),
-                                { sub_ubicacion: subUbicacionId, cantidad: cantidadSugerida }
-                              ]
-                            }));
-                            
-                            selectEl.value = "";
-                          }}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  )}
+                </div>
+              );
+            })}
 
+            {/* Footer con acciones */}
             <ModalFooter>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setShowAprobarSucursalModal(false);
-                  setPedidoToApprove(null);
-                  setSucursalUbicaciones({});
-                  setSucursalOrigenSeleccionada(null);
-                  setDisponibilidadSucursales([]);
-                  setSucursalOrigenStock([]);
-                }}
-                disabled={busy}
-              >
+              <Button variant="ghost" onClick={handleCerrarModalMixto}>
                 Cancelar
               </Button>
               <Button
                 variant="success"
-                onClick={confirmAprobarDesdeSucursal}
-                disabled={busy || !sucursalOrigenSeleccionada || pedidoToApprove.items.some(item => {
-                  const ubicacionesAsignadas = sucursalUbicaciones[item.id];
-                  if (!ubicacionesAsignadas || ubicacionesAsignadas.length === 0) return true;
-                  
-                  // Validar que la suma sea igual a la cantidad pedida
-                  const totalAsignado = ubicacionesAsignadas.reduce((sum, u) => sum + u.cantidad, 0);
-                  if (totalAsignado !== item.cantidad) return true;
-                  
-                  // Validar que cada asignación tenga stock suficiente
-                  return ubicacionesAsignadas.some(ub => {
-                    const qty = sucursalOrigenStock.find(
-                      s => s.producto === item.producto && s.sub_ubicacion === ub.sub_ubicacion
-                    )?.cantidad ?? 0;
-                    return qty < ub.cantidad;
-                  });
-                })}
+                onClick={handleConfirmarAprobacionMixta}
+                disabled={!validarConfiguracionCompleta() || busy}
                 loading={busy}
               >
                 <Check className="h-4 w-4" />
-                Aprobar y descontar sucursal
+                Aprobar pedido
               </Button>
             </ModalFooter>
           </div>
