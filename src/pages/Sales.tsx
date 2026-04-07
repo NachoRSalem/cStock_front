@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createVenta, type VentaItemCreate } from "../api/sales";
 import { listStock, type Stock } from "../api/stock";
 import { listProductos, type Producto } from "../api/products";
@@ -77,11 +77,19 @@ type CartItem = {
   dias_para_vencer: number | null;
 };
 
+type ScanSelectionState = {
+  producto: Producto;
+  opciones: Stock[];
+  codigo: string;
+};
+
 export default function Sales() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [stock, setStock] = useState<Stock[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [barcodeInput, setBarcodeInput] = useState("");
+  const [scanInfo, setScanInfo] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -92,6 +100,9 @@ export default function Sales() {
   // Modal de recibo
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState<{ id: number; items: CartItem[]; total: number } | null>(null);
+  const barcodeInputRef = useRef<HTMLInputElement | null>(null);
+  const [scanSelection, setScanSelection] = useState<ScanSelectionState | null>(null);
+  const [showScanSelectionModal, setShowScanSelectionModal] = useState(false);
 
   const session = tokenStorage.getSession();
   const sucursal = tokenStorage.getSucursal();
@@ -126,6 +137,32 @@ export default function Sales() {
     return stock.filter(s => s.producto === productoId);
   };
 
+  const getCartUsedForStockItem = (stockItem: Stock): number => {
+    return cart
+      .filter(item =>
+        item.producto === stockItem.producto &&
+        item.sub_ubicacion_origen === stockItem.sub_ubicacion &&
+        item.lote === stockItem.lote
+      )
+      .reduce((sum, item) => sum + item.cantidad, 0);
+  };
+
+  const getAvailableForStockItem = (stockItem: Stock): number => {
+    const used = getCartUsedForStockItem(stockItem);
+    return Math.max(0, stockItem.cantidad - used);
+  };
+
+  const getAvailableStockItemsForScan = (productoId: number): Stock[] => {
+    return getStockForProduct(productoId)
+      .filter((s) => getAvailableForStockItem(s) > 0)
+      .sort((a, b) => {
+        if (a.dias_para_vencer === null && b.dias_para_vencer === null) return 0;
+        if (a.dias_para_vencer === null) return 1;
+        if (b.dias_para_vencer === null) return -1;
+        return a.dias_para_vencer - b.dias_para_vencer;
+      });
+  };
+
   const addToCart = (producto: Producto, stockItem: Stock) => {
     const existingItem = cart.find(
       item => item.producto === producto.id && 
@@ -155,6 +192,66 @@ export default function Sales() {
         dias_para_vencer: stockItem.dias_para_vencer,
       }]);
     }
+  };
+
+  const addToCartByBarcode = (rawCode: string) => {
+    const code = rawCode.trim();
+    if (!code) return;
+
+    setErr(null);
+    setScanInfo(null);
+
+    const producto = productos.find((p) => (p.sku ?? "").trim().toLowerCase() === code.toLowerCase());
+    if (!producto) {
+      setErr(`No se encontró producto para el código: ${code}`);
+      return;
+    }
+
+    const opciones = getAvailableStockItemsForScan(producto.id);
+    if (opciones.length === 0) {
+      setErr(`Sin stock disponible para ${producto.nombre}`);
+      return;
+    }
+
+    // Si hay más de una opción de lote/sub-ubicación, el vendedor debe elegir manualmente.
+    if (opciones.length > 1) {
+      setScanSelection({ producto, opciones, codigo: code });
+      setShowScanSelectionModal(true);
+      return;
+    }
+
+    const stockItem = opciones[0];
+
+    addToCart(producto, stockItem);
+    setScanInfo(`Escaneado: ${producto.nombre}`);
+  };
+
+  const handleSelectScanStockOption = (stockId: number) => {
+    if (!scanSelection) return;
+
+    const selected = scanSelection.opciones.find((opt) => opt.id === stockId);
+    if (!selected) return;
+
+    addToCart(scanSelection.producto, selected);
+    setScanInfo(`Escaneado: ${scanSelection.producto.nombre} (${selected.sub_ubicacion_nombre}${selected.lote ? ` - Lote ${selected.lote}` : ""})`);
+    setShowScanSelectionModal(false);
+    setScanSelection(null);
+    setBarcodeInput("");
+    barcodeInputRef.current?.focus();
+  };
+
+  const closeScanSelectionModal = () => {
+    setShowScanSelectionModal(false);
+    setScanSelection(null);
+    barcodeInputRef.current?.focus();
+  };
+
+  const handleBarcodeSubmit = () => {
+    const code = barcodeInput.trim();
+    if (!code) return;
+    addToCartByBarcode(code);
+    setBarcodeInput("");
+    barcodeInputRef.current?.focus();
   };
 
   const updateCartItemQuantity = (index: number, cantidad: number) => {
@@ -243,6 +340,45 @@ export default function Sales() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Panel de productos */}
         <div className="lg:col-span-2 space-y-4">
+          {/* Escáner por código de barras */}
+          <Card>
+            <CardBody>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Lector de código de barras (SKU)
+                  </label>
+                  <input
+                    ref={barcodeInputRef}
+                    type="text"
+                    placeholder="Escaneá el código y presioná Enter..."
+                    value={barcodeInput}
+                    onChange={(e) => setBarcodeInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleBarcodeSubmit();
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <Button
+                  variant="primary"
+                  onClick={handleBarcodeSubmit}
+                  className="w-full sm:w-auto"
+                >
+                  Cargar por código
+                </Button>
+              </div>
+              {scanInfo && (
+                <div className="mt-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                  {scanInfo}
+                </div>
+              )}
+            </CardBody>
+          </Card>
+
           {/* Buscador */}
           <Card>
             <CardBody>
@@ -543,6 +679,48 @@ export default function Sales() {
             >
               <DollarSign className="h-5 w-5" />
               Confirmar Venta
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal de selección de lote/sub-ubicación para escaneo */}
+      <Modal open={showScanSelectionModal} onClose={closeScanSelectionModal}>
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Seleccionar origen del producto</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            El código {scanSelection?.codigo} corresponde a {scanSelection?.producto.nombre}. Elegí de qué sub-ubicación/lote se tomó.
+          </p>
+
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {scanSelection?.opciones.map((opcion) => {
+              const disponible = getAvailableForStockItem(opcion);
+              const textoVenc = vencimientoTexto(opcion.dias_para_vencer, opcion.fecha_vencimiento);
+
+              return (
+                <button
+                  key={opcion.id}
+                  onClick={() => handleSelectScanStockOption(opcion.id)}
+                  className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-medium text-gray-900">{opcion.sub_ubicacion_nombre}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {opcion.lote ? `Lote: ${opcion.lote}` : "Sin lote"}
+                        {textoVenc ? ` • ${textoVenc}` : ""}
+                      </div>
+                    </div>
+                    <Badge variant="approved">Disponible: {disponible}</Badge>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-3 mt-5">
+            <Button variant="outline" onClick={closeScanSelectionModal} className="flex-1">
+              Cancelar
             </Button>
           </div>
         </div>
