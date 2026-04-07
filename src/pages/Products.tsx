@@ -73,6 +73,7 @@ export default function Products() {
   });
   const [barcodeScanInput, setBarcodeScanInput] = useState("");
   const [barcodeScanInfo, setBarcodeScanInfo] = useState<string | null>(null);
+  const [productFormErr, setProductFormErr] = useState<string | null>(null);
   const barcodeScanRef = useRef<HTMLInputElement | null>(null);
   
   // Formulario categoría
@@ -125,6 +126,7 @@ export default function Products() {
   function openProductForm(product?: Producto) {
     setBarcodeScanInput("");
     setBarcodeScanInfo(null);
+    setProductFormErr(null);
     if (product) {
       setEditingProduct(product);
       setProductForm({
@@ -156,6 +158,7 @@ export default function Products() {
     setEditingProduct(null);
     setBarcodeScanInput("");
     setBarcodeScanInfo(null);
+    setProductFormErr(null);
   }
 
   function applyScannedBarcode(rawValue: string) {
@@ -163,6 +166,7 @@ export default function Products() {
     if (!scanned) return;
 
     setErr(null);
+    setProductFormErr(null);
     setBarcodeScanInfo(null);
 
     const duplicated = productos.find((p) => {
@@ -172,7 +176,7 @@ export default function Products() {
     });
 
     if (duplicated) {
-      setErr(`El código ${scanned} ya está asignado al producto "${duplicated.nombre}"`);
+      setProductFormErr(`El código ${scanned} ya está asignado al producto "${duplicated.nombre}"`);
       return;
     }
 
@@ -190,7 +194,7 @@ export default function Products() {
 
   async function handleSaveProduct() {
     if (!productForm.nombre || !productForm.categoria) {
-      setErr("Completá todos los campos obligatorios");
+      setProductFormErr("Completá todos los campos obligatorios");
       return;
     }
 
@@ -203,13 +207,14 @@ export default function Products() {
       });
 
       if (duplicated) {
-        setErr(`El código ${skuNormalized} ya está asignado al producto "${duplicated.nombre}"`);
+        setProductFormErr(`El código ${skuNormalized} ya está asignado al producto "${duplicated.nombre}"`);
         return;
       }
     }
 
     setBusy(true);
     setErr(null);
+    setProductFormErr(null);
     try {
       const payload: ProductoCreateUpdate = {
         ...productForm,
@@ -224,7 +229,7 @@ export default function Products() {
       await loadData();
       closeProductForm();
     } catch (e: any) {
-      setErr(e?.message ?? "Error guardando producto");
+      setProductFormErr(e?.message ?? "Error guardando producto");
     } finally {
       setBusy(false);
     }
@@ -497,6 +502,8 @@ export default function Products() {
             size="lg"
           >
             <div className="space-y-4">
+              {productFormErr && <Alert variant="error">{productFormErr}</Alert>}
+
               <div className="rounded-xl border border-primary-200 bg-primary-50 p-3">
                 <label className="block text-sm font-medium text-primary-900 mb-2">
                   Escanear código de barras
