@@ -13,6 +13,7 @@ export type Producto = {
   tipo_conservacion: "ambiente" | "heladera" | "freezer";
   precio_venta: string;
   costo_compra: string;
+  es_fabricable: boolean;
   sku: string | null;
   dias_caducidad: number | null;
 };
@@ -23,6 +24,7 @@ export type ProductoCreateUpdate = {
   tipo_conservacion: "ambiente" | "heladera" | "freezer";
   precio_venta: string | number;
   costo_compra: string | number;
+  es_fabricable: boolean;
   sku?: string | null;
   dias_caducidad?: number | null;
 };
@@ -31,11 +33,19 @@ export type CategoriaCreateUpdate = {
   nombre: string;
 };
 
-export function listProductos(params?: { tipo_conservacion?: string; categoria?: number; search?: string }) {
+export function listProductos(params?: {
+  tipo_conservacion?: string;
+  categoria?: number;
+  search?: string;
+  limit?: number;
+  es_fabricable?: boolean;
+}) {
   const query = new URLSearchParams();
   if (params?.tipo_conservacion) query.set("tipo_conservacion", params.tipo_conservacion);
   if (params?.categoria) query.set("categoria", params.categoria.toString());
   if (params?.search) query.set("search", params.search);
+  if (params?.limit) query.set("limit", params.limit.toString());
+  if (typeof params?.es_fabricable === "boolean") query.set("es_fabricable", params.es_fabricable ? "true" : "false");
   
   const queryString = query.toString();
   return apiFetch<Producto[]>(`/api/products/productos/${queryString ? "?" + queryString : ""}`);

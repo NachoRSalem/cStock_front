@@ -15,7 +15,7 @@ import {
   type PedidoItemCreate,
   type DisponibilidadSucursal,
 } from "../api/orders";
-import { listProductos, type Producto } from "../api/products";
+import { type Producto } from "../api/products";
 import { listSucursales, type Sucursal, type SubUbicacion } from "../api/locations";
 import { listStock, type Stock as StockItem } from "../api/stock";
 import { tokenStorage } from "../utils/storage";
@@ -34,7 +34,8 @@ import {
   ModalFooter,
   PageLoader,
   Alert,
-  ConfirmDialog
+  ConfirmDialog,
+  ProductAutocomplete,
 } from "../components/ui";
 import { Plus, Send, Check, X, Package, Trash2, Calendar, MapPin, FileDown, Edit, ChevronDown, ChevronUp, Filter, List, Search } from "lucide-react";
 import clsx from 'clsx';
@@ -47,7 +48,7 @@ type PedidoItemForm = {
 
 export default function Orders() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
-  const [productos, setProductos] = useState<Producto[]>([]);
+  const [productosCache, setProductosCache] = useState<Record<number, Producto>>({});
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -125,19 +126,16 @@ export default function Orders() {
     setLoading(true);
     setErr(null);
     try {
-      const [pedidosData, productosData, sucursalesData] = await Promise.all([
+      const [pedidosData, sucursalesData] = await Promise.all([
         listPedidos(),
-        listProductos(),
         listSucursales()
       ]);
       setPedidos(pedidosData);
-      setProductos(productosData);
       setSucursales(sucursalesData);
       
       // Debug: mostrar datos de sesión
       console.log('Session data:', session);
       console.log('Sucursales cargadas:', sucursalesData);
-      console.log('Productos cargados:', productosData);
       
       // Si es usuario de sucursal, auto-seleccionar su sucursal
       if (!isAdmin && session?.sucursal) {
@@ -221,7 +219,7 @@ export default function Orders() {
     setErr(null);
     try {
       const itemsToSend: PedidoItemCreate[] = items.map(item => {
-        const producto = productos.find(p => p.id === item.producto);
+        const producto = productosCache[item.producto];
         return {
           producto: item.producto,
           cantidad: item.cantidad,
@@ -276,6 +274,26 @@ export default function Orders() {
         cantidad: item.cantidad,
         precio_costo_momento: item.precio_costo_momento
       }));
+      setProductosCache(prev => {
+        const next = { ...prev };
+        pedidoCompleto.items.forEach(item => {
+          if (!next[item.producto]) {
+            next[item.producto] = {
+              id: item.producto,
+              nombre: item.producto_nombre,
+              categoria: 0,
+              categoria_nombre: "",
+              tipo_conservacion: "ambiente",
+              precio_venta: "0",
+              costo_compra: item.precio_costo_momento,
+              es_fabricable: false,
+              sku: null,
+              dias_caducidad: null,
+            };
+          }
+        });
+        return next;
+      });
       setItems(itemsForm);
       setShowEdit(true);
       setErr(null);
@@ -306,7 +324,7 @@ export default function Orders() {
     setErr(null);
     try {
       const itemsToSend: PedidoItemCreate[] = items.map(item => {
-        const producto = productos.find(p => p.id === item.producto);
+        const producto = productosCache[item.producto];
         return {
           producto: item.producto,
           cantidad: item.cantidad,
@@ -857,6 +875,21 @@ export default function Orders() {
     rechazado: "cancelled"
   };
 
+  const getNombreProducto = (productoId: number | null) => {
+    if (!productoId) return "";
+
+    if (productosCache[productoId]?.nombre) {
+      return productosCache[productoId].nombre;
+    }
+
+    for (const pedido of pedidos) {
+      const item = pedido.items.find((it) => it.producto === productoId);
+      if (item?.producto_nombre) return item.producto_nombre;
+    }
+
+    return "";
+  };
+
   if (loading) {
     return <PageLoader message="Cargando pedidos..." />;
   }
@@ -989,18 +1022,17 @@ export default function Orders() {
                 <label className="block text-sm font-medium text-neutral-700">
                   Producto
                 </label>
-                <select
-                  value={filtroProducto?.toString() ?? ""}
-                  onChange={(e) => setFiltroProducto(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
-                >
-                  <option value="">Todos los productos</option>
-                  {productos.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.nombre}
-                    </option>
-                  ))}
-                </select>
+                <ProductAutocomplete
+                  value={filtroProducto}
+                  selectedName={getNombreProducto(filtroProducto)}
+                  onSelect={(product) => {
+                    setFiltroProducto(product?.id ?? null);
+                    if (product) {
+                      setProductosCache(prev => ({ ...prev, [product.id]: product }));
+                    }
+                  }}
+                  placeholder="Filtrar por producto..."
+                />
               </div>
             </div>
             
@@ -1147,41 +1179,34 @@ export default function Orders() {
               ) : (
                 <div className="space-y-3">
                   {items.map((item, index) => {
-                    const producto = productos.find(p => p.id === item.producto);
                     return (
                       <div 
                         key={index} 
                         className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white p-4 transition-colors hover:border-primary-300 sm:flex-row"
                       >
                         <div className="flex-1 space-y-3">
-                          <select
-                            value={item.producto || ""} 
-                            onChange={(e) => {
-                              const prodId = Number(e.target.value);
-                              const prod = productos.find(p => p.id === prodId);
-                              const newItems = [...items];
-                              newItems[index] = {
-                                ...newItems[index],
-                                producto: prodId,
-                                precio_costo_momento: prod ? prod.costo_compra.toString() : newItems[index].precio_costo_momento
-                              };
-                              setItems(newItems);
-                            }}
-                            className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
-                          >
-                            <option value="">Seleccionar producto...</option>
-                            {productos
-                              .filter(p => {
-                                // Mostrar el producto actual o productos no seleccionados
-                                const yaSeleccionado = items.some((it, idx) => idx !== index && it.producto === p.id);
-                                return !yaSeleccionado;
-                              })
-                              .map(p => (
-                                <option key={p.id} value={p.id}>
-                                  {p.nombre} - {p.categoria_nombre || "Sin categoría"} - ${p.costo_compra}
-                                </option>
-                              ))}
-                          </select>
+                            <div>
+                              <ProductAutocomplete
+                                value={item.producto || null}
+                                selectedName={getNombreProducto(item.producto || null)}
+                                onSelect={(product) => {
+                                  const newItems = [...items];
+                                  if (!product) {
+                                    newItems[index] = { ...newItems[index], producto: 0 };
+                                  } else {
+                                    newItems[index] = {
+                                      ...newItems[index],
+                                      producto: product.id,
+                                      precio_costo_momento: product.costo_compra.toString(),
+                                    };
+                                    setProductosCache(prev => ({ ...prev, [product.id]: product }));
+                                  }
+                                  setItems(newItems);
+                                }}
+                                excludeIds={items.filter((it, i) => i !== index).map((it) => it.producto)}
+                                placeholder="Escribí para buscar producto..."
+                              />
+                            </div>
                           
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div>
@@ -1223,7 +1248,6 @@ export default function Orders() {
               <Button 
                 variant="outline" 
                 onClick={addItem} 
-                disabled={productos.length === 0}
                 className="w-full"
               >
                 <Plus className="h-4 w-4" />
@@ -1304,41 +1328,32 @@ export default function Orders() {
               ) : (
                 <div className="space-y-3">
                   {items.map((item, index) => {
-                    const producto = productos.find(p => p.id === item.producto);
                     return (
                       <div 
                         key={index} 
                         className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white p-4 transition-colors hover:border-primary-300 sm:flex-row"
                       >
                         <div className="flex-1 space-y-3">
-                          <select
-                            value={item.producto || ""} 
-                            onChange={(e) => {
-                              const prodId = Number(e.target.value);
-                              const prod = productos.find(p => p.id === prodId);
+                          <ProductAutocomplete
+                            value={item.producto || null}
+                            selectedName={getNombreProducto(item.producto || null)}
+                            onSelect={(product) => {
                               const newItems = [...items];
-                              newItems[index] = {
-                                ...newItems[index],
-                                producto: prodId,
-                                precio_costo_momento: prod ? prod.costo_compra.toString() : newItems[index].precio_costo_momento
-                              };
+                              if (!product) {
+                                newItems[index] = { ...newItems[index], producto: 0 };
+                              } else {
+                                newItems[index] = {
+                                  ...newItems[index],
+                                  producto: product.id,
+                                  precio_costo_momento: product.costo_compra.toString(),
+                                };
+                                setProductosCache(prev => ({ ...prev, [product.id]: product }));
+                              }
                               setItems(newItems);
                             }}
-                            className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
-                          >
-                            <option value="">Seleccionar producto...</option>
-                            {productos
-                              .filter(p => {
-                                // Mostrar el producto actual o productos no seleccionados
-                                const yaSeleccionado = items.some((it, idx) => idx !== index && it.producto === p.id);
-                                return !yaSeleccionado;
-                              })
-                              .map(p => (
-                                <option key={p.id} value={p.id}>
-                                  {p.nombre} - {p.categoria_nombre || "Sin categoría"} - ${p.costo_compra}
-                                </option>
-                              ))}
-                          </select>
+                            excludeIds={items.filter((it, i) => i !== index).map((it) => it.producto)}
+                            placeholder="Escribí para buscar producto..."
+                          />
                           
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div>
@@ -1380,7 +1395,6 @@ export default function Orders() {
               <Button 
                 variant="outline" 
                 onClick={addItem} 
-                disabled={productos.length === 0}
                 className="w-full"
               >
                 <Plus className="h-4 w-4" />

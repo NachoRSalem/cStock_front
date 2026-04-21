@@ -9,6 +9,7 @@ import {
   Package,
   FileText,
   ShoppingCart,
+  Factory,
   BarChart3,
   Users,
   Warehouse,
@@ -140,6 +141,7 @@ export function Layout() {
       { to: "/admin/locations", label: "Sucursales", icon: <MapPin className="h-5 w-5" />, roles: ["admin"] },
       { to: "/admin/stock", label: "Stock Global", icon: <Warehouse className="h-5 w-5" />, roles: ["admin"] },
       { to: "/admin/products", label: "Productos", icon: <Package className="h-5 w-5" />, roles: ["admin"] },
+      { to: "/admin/manufacture", label: "Fabricación", icon: <Factory className="h-5 w-5" />, roles: ["admin"] },
       { to: "/admin/orders", label: "Pedidos", icon: <FileText className="h-5 w-5" />, roles: ["admin"] },
       { to: "/admin/sales", label: "Ventas", icon: <ShoppingCart className="h-5 w-5" />, roles: ["admin"] },
       { to: "/admin/reports", label: "Reportes", icon: <BarChart3 className="h-5 w-5" />, roles: ["admin"] },
@@ -149,6 +151,7 @@ export function Layout() {
       { to: "/sucursal/stock", label: "Mi stock", icon: <Warehouse className="h-5 w-5" />, roles: ["sucursal"] },
       { to: "/sucursal/orders", label: "Mis pedidos", icon: <ClipboardCheck className="h-5 w-5" />, roles: ["sucursal"] },
       { to: "/sucursal/sales", label: "Registrar venta", icon: <ShoppingCart className="h-5 w-5" />, roles: ["sucursal"] },
+      { to: "/sucursal/manufacture", label: "Fabricación", icon: <Factory className="h-5 w-5" />, roles: ["sucursal"] },
       { to: "/sucursal/ventas", label: "Mis ventas", icon: <BarChart3 className="h-5 w-5" />, roles: ["sucursal"] },
     ],
     []

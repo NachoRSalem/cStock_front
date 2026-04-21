@@ -8,3 +8,4 @@ export { Modal, ModalFooter, type ModalProps } from './Modal';
 export { ConfirmDialog, type ConfirmDialogProps } from './ConfirmDialog';
 export { LoadingSpinner, PageLoader, TableLoader } from './Loading';
 export { Alert } from './Alert';
+export { ProductAutocomplete } from './ProductAutocomplete';

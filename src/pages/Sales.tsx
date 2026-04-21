@@ -12,7 +12,8 @@ import {
   Button, 
   Modal,
   Alert,
-  Badge
+  Badge,
+  ProductAutocomplete,
 } from "../components/ui";
 import { 
   ShoppingCart, 
@@ -84,10 +85,10 @@ type ScanSelectionState = {
 };
 
 export default function Sales() {
-  const [productos, setProductos] = useState<Producto[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
+  const [productosCache, setProductosCache] = useState<Record<number, Producto>>({});
   const [stock, setStock] = useState<Stock[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
   const [barcodeInput, setBarcodeInput] = useState("");
   const [scanInfo, setScanInfo] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -115,11 +116,7 @@ export default function Sales() {
     setLoading(true);
     setErr(null);
     try {
-      const [productosData, stockData] = await Promise.all([
-        listProductos(),
-        listStock({ ubicacion: sucursal ?? undefined, solo_con_stock: true })
-      ]);
-      setProductos(productosData);
+      const stockData = await listStock({ ubicacion: sucursal ?? undefined, solo_con_stock: true });
       setStock(stockData);
     } catch (e: any) {
       setErr(e?.message ?? "Error cargando datos");
@@ -127,11 +124,6 @@ export default function Sales() {
       setLoading(false);
     }
   }
-
-  const filteredProductos = productos.filter(p => 
-    p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.sku?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   const getStockForProduct = (productoId: number): Stock[] => {
     return stock.filter(s => s.producto === productoId);
@@ -164,6 +156,8 @@ export default function Sales() {
   };
 
   const addToCart = (producto: Producto, stockItem: Stock) => {
+    setProductosCache((prev) => ({ ...prev, [producto.id]: producto }));
+
     const existingItem = cart.find(
       item => item.producto === producto.id && 
              item.sub_ubicacion_origen === stockItem.sub_ubicacion &&
@@ -195,13 +189,18 @@ export default function Sales() {
   };
 
   const addToCartByBarcode = (rawCode: string) => {
+    void addToCartByBarcodeAsync(rawCode);
+  };
+
+  const addToCartByBarcodeAsync = async (rawCode: string) => {
     const code = rawCode.trim();
     if (!code) return;
 
     setErr(null);
     setScanInfo(null);
 
-    const producto = productos.find((p) => (p.sku ?? "").trim().toLowerCase() === code.toLowerCase());
+    const matches = await listProductos({ search: code, limit: 20 });
+    const producto = matches.find((p) => (p.sku ?? "").trim().toLowerCase() === code.toLowerCase());
     if (!producto) {
       setErr(`No se encontró producto para el código: ${code}`);
       return;
@@ -224,6 +223,11 @@ export default function Sales() {
 
     addToCart(producto, stockItem);
     setScanInfo(`Escaneado: ${producto.nombre}`);
+  };
+
+  const getProductoForStock = (productoId: number): Producto | null => {
+    if (selectedProduct?.id === productoId) return selectedProduct;
+    return productosCache[productoId] ?? null;
   };
 
   const handleSelectScanStockOption = (stockId: number) => {
@@ -382,16 +386,17 @@ export default function Sales() {
           {/* Buscador */}
           <Card>
             <CardBody>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar productos por nombre o SKU..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
+              <ProductAutocomplete
+                value={selectedProduct?.id ?? null}
+                selectedName={selectedProduct?.nombre ?? ""}
+                onSelect={(product) => {
+                  setSelectedProduct(product);
+                  if (product) {
+                    setProductosCache((prev) => ({ ...prev, [product.id]: product }));
+                  }
+                }}
+                placeholder="Buscar producto por nombre o SKU..."
+              />
             </CardBody>
           </Card>
 
@@ -400,22 +405,30 @@ export default function Sales() {
             <CardHeader>
               <CardTitle>Productos Disponibles</CardTitle>
               <CardDescription>
-                Hacé clic en un producto para agregarlo al carrito
+                Seleccioná un producto para ver sus lotes/sub-ubicaciones disponibles
               </CardDescription>
             </CardHeader>
             <CardBody className="p-0">
-              {filteredProductos.length === 0 ? (
+              {!selectedProduct ? (
                 <div className="text-center py-12">
                   <Package className="h-16 w-16 text-neutral-300 mx-auto mb-4" />
-                  <p className="text-neutral-500">No se encontraron productos</p>
+                  <p className="text-neutral-500">Buscá y seleccioná un producto</p>
                 </div>
               ) : (
                 <div className="divide-y divide-gray-200">
-                  {filteredProductos.map((producto) => {
+                  {(() => {
+                    const producto = selectedProduct;
                     const stockItems = getStockForProduct(producto.id);
                     const totalStock = stockItems.reduce((sum, s) => sum + s.cantidad, 0);
 
-                    if (totalStock === 0) return null;
+                    if (totalStock === 0) {
+                      return (
+                        <div className="text-center py-12">
+                          <Package className="h-16 w-16 text-neutral-300 mx-auto mb-4" />
+                          <p className="text-neutral-500">El producto seleccionado no tiene stock disponible</p>
+                        </div>
+                      );
+                    }
 
                     return (
                       <div key={producto.id} className="p-4 hover:bg-gray-50 transition-colors">
@@ -434,11 +447,9 @@ export default function Sales() {
                           </div>
                         </div>
 
-                        {/* Sub-ubicaciones disponibles */}
                         <div className="flex flex-wrap gap-2 mt-3">
                           {stockItems
                             .sort((a, b) => {
-                              // Ordenar por vencimiento: vencidos/por vencer primero
                               if (a.dias_para_vencer === null) return 1;
                               if (b.dias_para_vencer === null) return -1;
                               return a.dias_para_vencer - b.dias_para_vencer;
@@ -447,14 +458,14 @@ export default function Sales() {
                               const estado = vencimientoEstado(stockItem.dias_para_vencer);
                               const textoVenc = vencimientoTexto(stockItem.dias_para_vencer, stockItem.fecha_vencimiento);
                               const isVencidoOCritico = estado === "vencido" || estado === "critico";
-                              
+
                               return (
                                 <button
                                   key={stockItem.id}
                                   onClick={() => addToCart(producto, stockItem)}
                                   className={clsx(
                                     "flex flex-col items-start gap-1 px-3 py-2 rounded-lg transition-colors text-sm border-2",
-                                    isVencidoOCritico 
+                                    isVencidoOCritico
                                       ? "bg-red-50 hover:bg-red-100 text-red-700 border-red-200 hover:border-red-300"
                                       : "bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 hover:border-blue-300"
                                   )}
@@ -482,7 +493,7 @@ export default function Sales() {
                         </div>
                       </div>
                     );
-                  })}
+                  })()}
                 </div>
               )}
             </CardBody>

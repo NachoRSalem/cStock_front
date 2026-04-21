@@ -68,6 +68,7 @@ export default function Products() {
     tipo_conservacion: "ambiente",
     precio_venta: "",
     costo_compra: "",
+    es_fabricable: false,
     sku: "",
     dias_caducidad: null
   });
@@ -135,6 +136,7 @@ export default function Products() {
         tipo_conservacion: product.tipo_conservacion,
         precio_venta: product.precio_venta,
         costo_compra: product.costo_compra,
+        es_fabricable: product.es_fabricable,
         sku: product.sku || "",
         dias_caducidad: product.dias_caducidad
       });
@@ -146,6 +148,7 @@ export default function Products() {
         tipo_conservacion: "ambiente",
         precio_venta: "",
         costo_compra: "",
+        es_fabricable: false,
         sku: "",
         dias_caducidad: null
       });
@@ -533,6 +536,30 @@ export default function Products() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    Tipo de producto <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={productForm.es_fabricable ? "fabricable" : "normal"}
+                    onChange={(e) =>
+                      setProductForm({
+                        ...productForm,
+                        es_fabricable: e.target.value === "fabricable",
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                  >
+                    <option value="normal">Producto normal</option>
+                    <option value="fabricable">Producto fabricable (a partir de insumos)</option>
+                  </select>
+                  {productForm.es_fabricable && (
+                    <div className="mt-2 text-xs text-amber-700">
+                      Luego podés configurar la receta en el módulo de Fabricación.
+                    </div>
+                  )}
+                </div>
+
                 <Input
                   label="Nombre"
                   required
@@ -703,6 +730,7 @@ export default function Products() {
                       <TableRow>
                         <TableHead>Nombre</TableHead>
                         <TableHead>Categoría</TableHead>
+                        <TableHead className="text-center">Clase</TableHead>
                         <TableHead className="text-center">Tipo</TableHead>
                         <TableHead className="text-right">Precio Venta</TableHead>
                         <TableHead className="text-right">Costo</TableHead>
@@ -720,6 +748,11 @@ export default function Products() {
                           </TableCell>
                           <TableCell>
                             <Badge variant="default">{prod.categoria_nombre}</Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant={prod.es_fabricable ? "pending" : "approved"}>
+                              {prod.es_fabricable ? "Fabricable" : "Normal"}
+                            </Badge>
                           </TableCell>
                           <TableCell className="text-center">
                             <Badge variant={getTipoBadgeVariant(prod.tipo_conservacion)}>
@@ -1016,10 +1049,11 @@ export default function Products() {
                               type="number"
                               value={currentQuantity}
                               onChange={(e) =>
-                                handleStockQuantityChange(subUbic.id, parseInt(e.target.value) || 0)
+                                handleStockQuantityChange(subUbic.id, parseFloat(e.target.value) || 0)
                               }
                               className="w-20 text-center"
                               min="0"
+                              step="0.001"
                               disabled={busy}
                             />
                             <Button
