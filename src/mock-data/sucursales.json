@@ -1,19 +1,22 @@
 [
   {
     "id": 1,
-    "nombre": "Sucursal Central",
-    "tipo": "principal",
+    "nombre": "Almacén Central",
+    "tipo": "almacen",
     "sub_ubicaciones": [
-      { "id": 1, "nombre": "Heladera 1", "tipo": "heladera" },
-      { "id": 2, "nombre": "Freezer 1", "tipo": "freezer" }
+      {"id": 1, "nombre": "Heladera Principal", "tipo": "heladera"},
+      {"id": 2, "nombre": "Freezer Principal", "tipo": "freezer"},
+      {"id": 3, "nombre": "Ambiente Secado", "tipo": "ambiente"}
     ]
   },
   {
     "id": 2,
     "nombre": "Sucursal Norte",
-    "tipo": "secundaria",
+    "tipo": "sucursal",
     "sub_ubicaciones": [
-      { "id": 3, "nombre": "Ambiente 1", "tipo": "ambiente" }
+      {"id": 4, "nombre": "Heladera 1", "tipo": "heladera"},
+      {"id": 5, "nombre": "Freezer 1", "tipo": "freezer"},
+      {"id": 6, "nombre": "Exhibidor", "tipo": "ambiente"}
     ]
   }
 ]

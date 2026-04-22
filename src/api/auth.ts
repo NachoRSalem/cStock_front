@@ -1,4 +1,3 @@
-import { apiFetch } from "./http";
 import usuariosMock from "../mock-data/usuarios.json";
 
 export type TokenResponse = {
@@ -19,7 +18,7 @@ export function login(username: string, password: string) {
   return Promise.resolve({
     refresh: "mock-refresh-token",
     access: "mock-access-token",
-    rol: user.rol,
+    rol: user.rol as "admin" | "sucursal",
     sucursal: user.sucursal,
     username: user.username,
   });

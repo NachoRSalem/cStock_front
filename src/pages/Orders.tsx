@@ -632,12 +632,12 @@ export default function Orders() {
         if (config.tipo === 'distribuidor') {
           return {
             id: item.id,
-            origen_tipo: 'distribuidor'
+            origen_tipo: 'distribuidor' as const
           };
         } else {
           return {
             id: item.id,
-            origen_tipo: 'sucursal',
+            origen_tipo: 'sucursal' as const,
             origen_sucursal: config.sucursalOrigen,
             sub_ubicaciones_origen: config.subUbicaciones.map(ub => ({
               sub_ubicacion: ub.sub_ubicacion,

@@ -3,12 +3,12 @@
     "username": "admin",
     "password": "admin123",
     "rol": "admin",
-    "sucursal": null
+    "sucursal": 1
   },
   {
-    "username": "user",
-    "password": "user123",
+    "username": "sucursal",
+    "password": "paso123",
     "rol": "sucursal",
-    "sucursal": 1
+    "sucursal": 2
   }
 ]

@@ -3,7 +3,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import clsx from 'clsx';
 
 const badgeVariants = cva(
-  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium transition-colors',
   {
     variants: {
       variant: {
@@ -18,9 +18,15 @@ const badgeVariants = cva(
         info: 'bg-blue-100 text-blue-700 border border-blue-200',
         default: 'bg-neutral-100 text-neutral-700 border border-neutral-200',
       },
+      size: {
+        sm: 'text-xs',
+        md: 'text-sm',
+        lg: 'text-base',
+      },
     },
     defaultVariants: {
       variant: 'default',
+      size: 'md',
     },
   }
 );
