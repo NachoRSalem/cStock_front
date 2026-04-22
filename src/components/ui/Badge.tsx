@@ -35,6 +35,7 @@ export interface BadgeProps
   extends HTMLAttributes<HTMLSpanElement>,
     VariantProps<typeof badgeVariants> {
   dot?: boolean;
+  size?: "sm" | "md" | "lg";
 }
 
 export function Badge({ className, variant, dot, children, ...props }: BadgeProps) {
