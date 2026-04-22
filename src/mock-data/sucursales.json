@@ -1,0 +1,19 @@
+[
+  {
+    "id": 1,
+    "nombre": "Sucursal Central",
+    "tipo": "principal",
+    "sub_ubicaciones": [
+      { "id": 1, "nombre": "Heladera 1", "tipo": "heladera" },
+      { "id": 2, "nombre": "Freezer 1", "tipo": "freezer" }
+    ]
+  },
+  {
+    "id": 2,
+    "nombre": "Sucursal Norte",
+    "tipo": "secundaria",
+    "sub_ubicaciones": [
+      { "id": 3, "nombre": "Ambiente 1", "tipo": "ambiente" }
+    ]
+  }
+]

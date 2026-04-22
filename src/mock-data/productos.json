@@ -1,0 +1,24 @@
+[
+  {
+    "id": 1,
+    "nombre": "Producto A",
+    "categoria": 1,
+    "categoria_nombre": "Categoría 1",
+    "tipo_conservacion": "ambiente",
+    "precio_venta": "100.00",
+    "costo_compra": "50.00",
+    "sku": "A001",
+    "dias_caducidad": 30
+  },
+  {
+    "id": 2,
+    "nombre": "Producto B",
+    "categoria": 2,
+    "categoria_nombre": "Categoría 2",
+    "tipo_conservacion": "heladera",
+    "precio_venta": "200.00",
+    "costo_compra": "120.00",
+    "sku": "B002",
+    "dias_caducidad": 15
+  }
+]
