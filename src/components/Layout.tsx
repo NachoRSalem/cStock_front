@@ -2,6 +2,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { tokenStorage } from "../utils/storage";
 import { useState, useMemo, useEffect } from "react";
 import { listPedidos } from "../api/orders";
+import { switchAccount } from "../api/auth";
 import clsx from "clsx";
 import {
   Home,
@@ -18,7 +19,9 @@ import {
   Menu,
   X,
   ChevronLeft,
+  Repeat,
 } from "lucide-react";
+import { ConfirmDialog } from "./ui/ConfirmDialog";
 
 type NavItem = {
   to: string;
@@ -96,11 +99,14 @@ export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [pedidosPendientes, setPedidosPendientes] = useState(0);
+  const [showSwitchDialog, setShowSwitchDialog] = useState(false);
+  const [switchLoading, setSwitchLoading] = useState(false);
 
   const role = tokenStorage.getRole();
   const username = tokenStorage.getUsername();
   const sucursal = tokenStorage.getSucursal();
   const session = tokenStorage.getSession();
+  const cuentaPareada = tokenStorage.getCuentaPareada();
 
   // Cargar pedidos pendientes
   useEffect(() => {
@@ -162,6 +168,31 @@ export function Layout() {
   function logout() {
     tokenStorage.clear();
     nav("/login");
+  }
+
+  async function handleSwitchAccount() {
+    const refresh = tokenStorage.getRefresh();
+    if (!refresh) return;
+
+    setSwitchLoading(true);
+    try {
+      const newSession = await switchAccount(refresh);
+      tokenStorage.setSession({
+        access: newSession.access,
+        refresh: newSession.refresh,
+        rol: newSession.rol,
+        sucursal: newSession.sucursal,
+        username: newSession.username,
+        cuenta_pareada: newSession.cuenta_pareada,
+      });
+      setShowSwitchDialog(false);
+      nav(0);
+    } catch (err) {
+      console.error("Error switching account:", err);
+      alert("Error al cambiar de cuenta");
+    } finally {
+      setSwitchLoading(false);
+    }
   }
 
   const closeMobileSidebar = () => {
@@ -319,6 +350,18 @@ export function Layout() {
           </div>
 
           <div className="flex items-center gap-3">
+            {cuentaPareada && (
+              <button
+                onClick={() => setShowSwitchDialog(true)}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors border border-amber-200"
+                title={`Cambiar a ${cuentaPareada}`}
+              >
+                <Repeat className="h-4 w-4" />
+                <span className="hidden sm:inline text-xs font-medium">
+                  Cambiar a {cuentaPareada}
+                </span>
+              </button>
+            )}
             <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-neutral-100">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-xs font-medium text-neutral-700">En línea</span>
@@ -333,6 +376,18 @@ export function Layout() {
           </div>
         </main>
       </div>
+
+      <ConfirmDialog
+        open={showSwitchDialog}
+        onClose={() => setShowSwitchDialog(false)}
+        onConfirm={handleSwitchAccount}
+        title="Cambiar de cuenta"
+        message={`Si cambias a ${cuentaPareada}, se perderá el progreso de cualquier operación que estés realizando (ventas, pedidos, etc.). ¿Continuar?`}
+        confirmText={`Cambiar a ${cuentaPareada}`}
+        cancelText="Cancelar"
+        variant="warning"
+        loading={switchLoading}
+      />
     </div>
   );
 }

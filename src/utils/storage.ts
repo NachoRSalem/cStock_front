@@ -6,6 +6,7 @@ export type SessionData = {
   rol: "admin" | "sucursal";
   sucursal: number | null;
   username: string;
+  cuenta_pareada: string | null;
 };
 
 export const tokenStorage = {
@@ -33,6 +34,10 @@ export const tokenStorage = {
 
   getUsername(): string | null {
     return this.getSession()?.username ?? null;
+  },
+
+  getCuentaPareada(): string | null {
+    return this.getSession()?.cuenta_pareada ?? null;
   },
 
   setSession(session: SessionData) {
