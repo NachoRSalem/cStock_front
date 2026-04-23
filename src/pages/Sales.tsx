@@ -333,8 +333,8 @@ export default function Sales() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Registro de Ventas</h1>
-        <p className="text-gray-600 mt-1">
+        <h1 className="text-3xl font-bold text-neutral-900">Registro de Ventas</h1>
+        <p className="text-neutral-600 mt-1">
           Seleccioná productos y registrá ventas
         </p>
       </div>
@@ -349,7 +349,7 @@ export default function Sales() {
             <CardBody>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">
                     Lector de código de barras (SKU)
                   </label>
                   <input
@@ -364,7 +364,7 @@ export default function Sales() {
                         handleBarcodeSubmit();
                       }
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 <Button
@@ -415,7 +415,7 @@ export default function Sales() {
                   <p className="text-neutral-500">Buscá y seleccioná un producto</p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-200">
+                <div className="divide-y divide-neutral-200">
                   {(() => {
                     const producto = selectedProduct;
                     const stockItems = getStockForProduct(producto.id);
@@ -431,19 +431,19 @@ export default function Sales() {
                     }
 
                     return (
-                      <div key={producto.id} className="p-4 hover:bg-gray-50 transition-colors">
+                      <div key={producto.id} className="p-4 hover:bg-neutral-50 transition-colors">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
-                            <h3 className="font-semibold text-gray-900">{producto.nombre}</h3>
+                            <h3 className="font-semibold text-neutral-900">{producto.nombre}</h3>
                             {producto.sku && (
-                              <p className="text-sm text-gray-500">SKU: {producto.sku}</p>
+                              <p className="text-sm text-neutral-500">SKU: {producto.sku}</p>
                             )}
                           </div>
                           <div className="text-right ml-4">
                             <p className="text-lg font-bold text-emerald-600">
                               ${parseFloat(producto.precio_venta).toFixed(2)}
                             </p>
-                            <p className="text-sm text-gray-500">Stock: {totalStock}</p>
+                            <p className="text-sm text-neutral-500">Stock: {totalStock}</p>
                           </div>
                         </div>
 
@@ -527,12 +527,12 @@ export default function Sales() {
                       const textoVenc = vencimientoTexto(item.dias_para_vencer, item.fecha_vencimiento);
                       
                       return (
-                        <div key={index} className="p-3 bg-gray-50 rounded-lg">
+                        <div key={index} className="p-3 bg-neutral-50 rounded-lg">
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex-1">
-                              <p className="font-medium text-gray-900 text-sm">{item.producto_nombre}</p>
+                              <p className="font-medium text-neutral-900 text-sm">{item.producto_nombre}</p>
                               <div className="flex flex-col gap-1 mt-1">
-                                <p className="text-xs text-gray-500 flex items-center gap-1">
+                                <p className="text-xs text-neutral-500 flex items-center gap-1">
                                   <MapPin className="h-3 w-3" />
                                   {item.sub_ubicacion_nombre}
                                 </p>
@@ -545,7 +545,7 @@ export default function Sales() {
                                   </Badge>
                                 )}
                                 {item.lote && (
-                                  <p className="text-xs text-gray-400">Lote: {item.lote}</p>
+                                  <p className="text-xs text-neutral-400">Lote: {item.lote}</p>
                                 )}
                               </div>
                             </div>
@@ -562,7 +562,7 @@ export default function Sales() {
                             <button
                               onClick={() => updateCartItemQuantity(index, item.cantidad - 1)}
                               disabled={item.cantidad <= 1}
-                              className="w-7 h-7 flex items-center justify-center bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                              className="w-7 h-7 flex items-center justify-center bg-white border border-neutral-300 rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-50"
                             >
                               -
                             </button>
@@ -570,19 +570,19 @@ export default function Sales() {
                               type="number"
                               value={item.cantidad}
                               onChange={(e) => updateCartItemQuantity(index, parseInt(e.target.value) || 1)}
-                              className="w-12 text-center border border-gray-300 rounded py-1 text-sm"
+                              className="w-12 text-center border border-neutral-300 rounded py-1 text-sm"
                               min="1"
                               max={item.stock_disponible}
                             />
                             <button
                               onClick={() => updateCartItemQuantity(index, item.cantidad + 1)}
                               disabled={item.cantidad >= item.stock_disponible}
-                              className="w-7 h-7 flex items-center justify-center bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                              className="w-7 h-7 flex items-center justify-center bg-white border border-neutral-300 rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-50"
                             >
                               +
                             </button>
                           </div>
-                          <p className="font-bold text-gray-900">
+                          <p className="font-bold text-neutral-900">
                             ${(item.cantidad * item.precio_venta_momento).toFixed(2)}
                           </p>
                           </div>
@@ -592,9 +592,9 @@ export default function Sales() {
                   </div>
 
                   {/* Total y botón de confirmación - siempre visible */}
-                  <div className="border-t border-gray-200 mt-4 pt-4 shrink-0">
+                  <div className="border-t border-neutral-200 mt-4 pt-4 shrink-0">
                     <div className="flex items-center justify-between mb-4">
-                      <span className="text-lg font-semibold text-gray-900">Total</span>
+                      <span className="text-lg font-semibold text-neutral-900">Total</span>
                       <span className="text-2xl font-bold text-emerald-600">
                         ${totalVenta.toFixed(2)}
                       </span>
@@ -627,38 +627,38 @@ export default function Sales() {
             </div>
           </div>
 
-          <h2 className="text-2xl font-bold text-center text-gray-900 mb-2">
+          <h2 className="text-2xl font-bold text-center text-neutral-900 mb-2">
             Confirmar Venta
           </h2>
-          <p className="text-center text-gray-600 mb-6">
+          <p className="text-center text-neutral-600 mb-6">
             Revisá los detalles antes de registrar la venta
           </p>
 
           {/* Detalle de items */}
-          <div className="bg-gray-50 rounded-lg p-4 mb-6 max-h-96 overflow-y-auto">
-            <h3 className="font-semibold text-gray-900 mb-3">Productos</h3>
+          <div className="bg-neutral-50 rounded-lg p-4 mb-6 max-h-96 overflow-y-auto">
+            <h3 className="font-semibold text-neutral-900 mb-3">Productos</h3>
             <div className="space-y-3">
               {cart.map((item, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
+                <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border border-neutral-200">
                   <div className="flex-1">
-                    <p className="font-medium text-gray-900">{item.producto_nombre}</p>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="font-medium text-neutral-900">{item.producto_nombre}</p>
+                    <p className="text-xs text-neutral-500 mt-1">
                       {item.sub_ubicacion_nombre}
                     </p>
-                    <p className="text-xs text-gray-600 mt-1">
+                    <p className="text-xs text-neutral-600 mt-1">
                       {item.cantidad} × ${item.precio_venta_momento.toFixed(2)}
                     </p>
                   </div>
-                  <p className="font-bold text-gray-900 text-lg">
+                  <p className="font-bold text-neutral-900 text-lg">
                     ${(item.cantidad * item.precio_venta_momento).toFixed(2)}
                   </p>
                 </div>
               ))}
             </div>
 
-            <div className="border-t border-gray-300 mt-4 pt-4">
+            <div className="border-t border-neutral-300 mt-4 pt-4">
               <div className="flex items-center justify-between">
-                <span className="text-lg font-bold text-gray-900">Total</span>
+                <span className="text-lg font-bold text-neutral-900">Total</span>
                 <span className="text-2xl font-bold text-emerald-600">
                   ${totalVenta.toFixed(2)}
                 </span>
@@ -698,8 +698,8 @@ export default function Sales() {
       {/* Modal de selección de lote/sub-ubicación para escaneo */}
       <Modal open={showScanSelectionModal} onClose={closeScanSelectionModal}>
         <div className="p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Seleccionar origen del producto</h2>
-          <p className="text-sm text-gray-600 mb-4">
+          <h2 className="text-xl font-bold text-neutral-900 mb-2">Seleccionar origen del producto</h2>
+          <p className="text-sm text-neutral-600 mb-4">
             El código {scanSelection?.codigo} corresponde a {scanSelection?.producto.nombre}. Elegí de qué sub-ubicación/lote se tomó.
           </p>
 
@@ -712,12 +712,12 @@ export default function Sales() {
                 <button
                   key={opcion.id}
                   onClick={() => handleSelectScanStockOption(opcion.id)}
-                  className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                  className="w-full text-left p-3 rounded-lg border border-neutral-200 hover:border-blue-300 hover:bg-blue-50 transition-colors"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <div className="font-medium text-gray-900">{opcion.sub_ubicacion_nombre}</div>
-                      <div className="text-xs text-gray-500 mt-0.5">
+                      <div className="font-medium text-neutral-900">{opcion.sub_ubicacion_nombre}</div>
+                      <div className="text-xs text-neutral-500 mt-0.5">
                         {opcion.lote ? `Lote: ${opcion.lote}` : "Sin lote"}
                         {textoVenc ? ` • ${textoVenc}` : ""}
                       </div>
@@ -746,35 +746,35 @@ export default function Sales() {
             </div>
           </div>
 
-          <h2 className="text-2xl font-bold text-center text-gray-900 mb-2">
+          <h2 className="text-2xl font-bold text-center text-neutral-900 mb-2">
             ¡Venta Registrada!
           </h2>
-          <p className="text-center text-gray-600 mb-6">
+          <p className="text-center text-neutral-600 mb-6">
             Venta #{receiptData?.id}
           </p>
 
           {/* Detalle de items */}
-          <div className="bg-gray-50 rounded-lg p-4 mb-6">
-            <h3 className="font-semibold text-gray-900 mb-3">Detalle de productos</h3>
+          <div className="bg-neutral-50 rounded-lg p-4 mb-6">
+            <h3 className="font-semibold text-neutral-900 mb-3">Detalle de productos</h3>
             <div className="space-y-2">
               {receiptData?.items.map((item, index) => (
                 <div key={index} className="flex items-center justify-between text-sm">
                   <div className="flex-1">
-                    <p className="font-medium text-gray-900">{item.producto_nombre}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="font-medium text-neutral-900">{item.producto_nombre}</p>
+                    <p className="text-xs text-neutral-500">
                       {item.cantidad} x ${item.precio_venta_momento.toFixed(2)}
                     </p>
                   </div>
-                  <p className="font-semibold text-gray-900">
+                  <p className="font-semibold text-neutral-900">
                     ${(item.cantidad * item.precio_venta_momento).toFixed(2)}
                   </p>
                 </div>
               ))}
             </div>
 
-            <div className="border-t border-gray-300 mt-4 pt-4">
+            <div className="border-t border-neutral-300 mt-4 pt-4">
               <div className="flex items-center justify-between">
-                <span className="text-lg font-bold text-gray-900">Total</span>
+                <span className="text-lg font-bold text-neutral-900">Total</span>
                 <span className="text-2xl font-bold text-emerald-600">
                   ${receiptData?.total.toFixed(2)}
                 </span>

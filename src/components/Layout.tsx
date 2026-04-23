@@ -1,4 +1,5 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { PageTransition } from "./PageTransition";
 import { tokenStorage } from "../utils/storage";
 import { useState, useMemo, useEffect } from "react";
 import { listPedidos } from "../api/orders";
@@ -96,6 +97,7 @@ function NavLink({
 
 export function Layout() {
   const nav = useNavigate();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [pedidosPendientes, setPedidosPendientes] = useState(0);
@@ -372,7 +374,9 @@ export function Layout() {
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto custom-scrollbar">
           <div className="mx-auto max-w-[1600px] p-3 sm:p-4 lg:p-6">
-            <Outlet />
+            <PageTransition key={location.pathname}>
+              <Outlet />
+            </PageTransition>
           </div>
         </main>
       </div>

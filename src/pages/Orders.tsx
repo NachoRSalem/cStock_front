@@ -132,20 +132,15 @@ export default function Orders() {
       ]);
       setPedidos(pedidosData);
       setSucursales(sucursalesData);
-      
-      // Debug: mostrar datos de sesión
-      console.log('Session data:', session);
-      console.log('Sucursales cargadas:', sucursalesData);
-      
+
       // Si es usuario de sucursal, auto-seleccionar su sucursal
       if (!isAdmin && session?.sucursal) {
         // Manejar tanto número como string (por compatibilidad con sesiones antiguas)
-        const sucursalId = typeof session.sucursal === 'number' 
-          ? session.sucursal 
+        const sucursalId = typeof session.sucursal === 'number'
+          ? session.sucursal
           : parseInt(session.sucursal as any, 10);
-        
+
         if (!isNaN(sucursalId)) {
-          console.log('Setting destino to:', sucursalId);
           setDestino(sucursalId);
         }
       }
@@ -196,7 +191,6 @@ export default function Orders() {
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
     setItems(newItems);
-    console.log('Items actualizados:', newItems);
   }
 
   async function onCreate() {

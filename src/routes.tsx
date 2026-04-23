@@ -16,6 +16,7 @@ import AdminSalesView from "./pages/AdminSalesView";
 import SucursalSalesView from "./pages/SucursalSalesView";
 import Products from "./pages/Products";
 import Manufacture from "./pages/Manufacture";
+import ManufactureHistory from "./pages/ManufactureHistory";
 
 import Users from "./pages/Users";
 import Stock from "./pages/Stock";
@@ -42,6 +43,7 @@ export const router = createBrowserRouter([
       { path: "admin/users", element: <Users /> },
       { path: "admin/products", element: <Products /> },
       { path: "admin/manufacture", element: <Manufacture /> },
+      { path: "admin/manufacture-history", element: <ManufactureHistory /> },
 
       // SUCURSAL
       { path: "sucursal", element: <BranchDashboard /> },
@@ -50,8 +52,7 @@ export const router = createBrowserRouter([
       { path: "sucursal/sales", element: <Sales /> },
       { path: "sucursal/ventas", element: <SucursalSalesView /> },
       { path: "sucursal/manufacture", element: <Manufacture /> },
-
-
+      { path: "sucursal/manufacture-history", element: <ManufactureHistory /> },
 
       // 404
       { path: "*", element: <NotFound /> },

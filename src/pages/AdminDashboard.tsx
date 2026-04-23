@@ -16,42 +16,48 @@ export default function AdminDashboard() {
       title: "Gestión de Sucursales",
       description: "Administrar sucursales y sub-ubicaciones del sistema",
       link: "/admin/locations",
-      color: "primary",
+      iconBg: "bg-blue-50",
+      iconColor: "text-blue-600",
     },
     {
       icon: <Package className="h-5 w-5" />,
       title: "Productos y Categorías",
       description: "Gestionar catálogo de productos y sus categorías",
       link: "/admin/products",
-      color: "emerald",
+      iconBg: "bg-emerald-50",
+      iconColor: "text-emerald-600",
     },
     {
       icon: <FileText className="h-5 w-5" />,
       title: "Gestión de Pedidos",
       description: "Ver y administrar todos los pedidos del sistema",
       link: "/admin/orders",
-      color: "blue",
+      iconBg: "bg-amber-50",
+      iconColor: "text-amber-600",
     },
     {
       icon: <CheckSquare className="h-5 w-5" />,
       title: "Aprobar Pedidos",
       description: "Revisar y aprobar pedidos pendientes",
-      link: "/admin/orders/aprobaciones",
-      color: "orange",
+      link: "/admin/orders",
+      iconBg: "bg-orange-50",
+      iconColor: "text-orange-600",
     },
     {
       icon: <BarChart3 className="h-5 w-5" />,
       title: "Reportes y Estadísticas",
       description: "Ver reportes económicos y comparativos",
       link: "/admin/reports",
-      color: "purple",
+      iconBg: "bg-purple-50",
+      iconColor: "text-purple-600",
     },
     {
       icon: <Users className="h-5 w-5" />,
       title: "Usuarios del Sistema",
       description: "Administrar usuarios y permisos",
       link: "/admin/users",
-      color: "neutral",
+      iconBg: "bg-neutral-100",
+      iconColor: "text-neutral-600",
     },
   ];
 
@@ -73,12 +79,8 @@ export default function AdminDashboard() {
           <Link key={feature.link} to={feature.link}>
             <Card hover className="h-full transition-all hover:border-primary-300">
               <CardBody>
-                <div
-                  className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 bg-${feature.color}-100`}
-                >
-                  <span className={`text-${feature.color}-600`}>
-                    {feature.icon}
-                  </span>
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${feature.iconBg}`}>
+                  <span className={feature.iconColor}>{feature.icon}</span>
                 </div>
                 <h3 className="text-lg font-semibold text-neutral-900 mb-2">
                   {feature.title}
