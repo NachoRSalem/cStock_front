@@ -283,6 +283,7 @@ export default function Orders() {
               es_fabricable: false,
               sku: null,
               dias_caducidad: null,
+              unidad_medida: null,
             };
           }
         });
@@ -1218,9 +1219,9 @@ export default function Orders() {
                               <Input
                                 type="number" 
                                 value={item.precio_costo_momento}
-                                readOnly
-                                disabled
-                                className="bg-neutral-50"
+                                onChange={(e) => updateItem(index, "precio_costo_momento", e.target.value)}
+                                step="0.01"
+                                placeholder="0.00"
                               />
                             </div>
                           </div>
@@ -1365,9 +1366,9 @@ export default function Orders() {
                               <Input
                                 type="number" 
                                 value={item.precio_costo_momento}
-                                readOnly
-                                disabled
-                                className="bg-neutral-50"
+                                onChange={(e) => updateItem(index, "precio_costo_momento", e.target.value)}
+                                step="0.01"
+                                placeholder="0.00"
                               />
                             </div>
                           </div>

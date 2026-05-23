@@ -62,3 +62,16 @@ export function updateStock(id: number, body: StockUpdateBody) {
     body,
   });
 }
+
+export type PrecioHistoricoItem = {
+  id: number;
+  cantidad: number;
+  precio_costo_momento: string;
+  fecha: string;
+  sucursal: string;
+  total: number;
+};
+
+export function getPrecioHistorico(productoId: number) {
+  return apiFetch<PrecioHistoricoItem[]>(`/api/inventory/precio-historico/?producto_id=${productoId}`);
+}

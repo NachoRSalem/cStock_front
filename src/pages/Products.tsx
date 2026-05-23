@@ -15,7 +15,7 @@ import {
   type CategoriaCreateUpdate
 } from "../api/products";
 import { listSucursales, type Sucursal } from "../api/locations";
-import { listStock, updateStock, createStock, type Stock } from "../api/stock";
+import { listStock, updateStock, createStock, getPrecioHistorico, type Stock, type PrecioHistoricoItem } from "../api/stock";
 import { tokenStorage } from "../utils/storage";
 import { 
   Card, 
@@ -70,7 +70,8 @@ export default function Products() {
     costo_compra: "",
     es_fabricable: false,
     sku: "",
-    dias_caducidad: null
+    dias_caducidad: null,
+    unidad_medida: ""
   });
   const [barcodeScanInput, setBarcodeScanInput] = useState("");
   const [barcodeScanInfo, setBarcodeScanInfo] = useState<string | null>(null);
@@ -95,6 +96,12 @@ export default function Products() {
   const [selectedSucursalForStock, setSelectedSucursalForStock] = useState<number | null>(null);
   const [stockItems, setStockItems] = useState<Stock[]>([]);
   const [stockUpdates, setStockUpdates] = useState<Record<number, number>>({});
+
+  // Estados para modal de historial de precios
+  const [showPriceHistoryModal, setShowPriceHistoryModal] = useState(false);
+  const [selectedProductForPriceHistory, setSelectedProductForPriceHistory] = useState<Producto | null>(null);
+  const [priceHistory, setPriceHistory] = useState<PrecioHistoricoItem[]>([]);
+  const [loadingPriceHistory, setLoadingPriceHistory] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -138,7 +145,8 @@ export default function Products() {
         costo_compra: product.costo_compra,
         es_fabricable: product.es_fabricable,
         sku: product.sku || "",
-        dias_caducidad: product.dias_caducidad
+        dias_caducidad: product.dias_caducidad,
+        unidad_medida: product.unidad_medida || ""
       });
     } else {
       setEditingProduct(null);
@@ -150,7 +158,8 @@ export default function Products() {
         costo_compra: "",
         es_fabricable: false,
         sku: "",
-        dias_caducidad: null
+        dias_caducidad: null,
+        unidad_medida: ""
       });
     }
     setShowProductForm(true);
@@ -415,6 +424,28 @@ export default function Products() {
     }
   }
 
+  // Funciones para modal de historial de precios
+  async function openPriceHistoryModal(product: Producto) {
+    setSelectedProductForPriceHistory(product);
+    setShowPriceHistoryModal(true);
+    setPriceHistory([]);
+    setLoadingPriceHistory(true);
+    try {
+      const data = await getPrecioHistorico(product.id);
+      setPriceHistory(data);
+    } catch (e: any) {
+      setErr(e?.message ?? "Error cargando historial de precios");
+    } finally {
+      setLoadingPriceHistory(false);
+    }
+  }
+
+  function closePriceHistoryModal() {
+    setShowPriceHistoryModal(false);
+    setSelectedProductForPriceHistory(null);
+    setPriceHistory([]);
+  }
+
   const getTipoIcon = (tipo: string) => {
     switch (tipo) {
       case "ambiente":
@@ -616,6 +647,14 @@ export default function Products() {
                 />
 
                 <Input
+                  label="Unidad de medida"
+                  value={productForm.unidad_medida || ""}
+                  onChange={(e) => setProductForm({ ...productForm, unidad_medida: e.target.value })}
+                  placeholder="Ej: kg, g, l, ml, unidad"
+                  helperText="Opcional. Solo para productos que se miden por peso o volumen"
+                />
+
+                <Input
                   label="Precio de venta"
                   type="number"
                   step="0.01"
@@ -779,6 +818,16 @@ export default function Products() {
                                 disabled={busy}
                               >
                                 <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openPriceHistoryModal(prod)}
+                                disabled={busy}
+                                className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                title="Historial de precios"
+                              >
+                                <DollarSign className="h-4 w-4" />
                               </Button>
                               {isAdmin && (
                                 <Button
@@ -1092,6 +1141,53 @@ export default function Products() {
             disabled={!selectedSucursalForStock || Object.keys(stockUpdates).length === 0}
           >
             Guardar Stock
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Modal de Historial de Precios */}
+      <Modal
+        open={showPriceHistoryModal}
+        onClose={closePriceHistoryModal}
+        title={`Historial de precios - ${selectedProductForPriceHistory?.nombre || ""}`}
+        description="Últimas compras registradas (pedidos recibidos)"
+        size="lg"
+      >
+        <div className="space-y-4">
+          {loadingPriceHistory ? (
+            <div className="text-center py-8 text-neutral-500">Cargando...</div>
+          ) : priceHistory.length === 0 ? (
+            <div className="text-center py-8 text-neutral-500">No hay compras registradas para este producto.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Sucursal</TableHead>
+                    <TableHead className="text-right">Cantidad</TableHead>
+                    <TableHead className="text-right">Precio unit.</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {priceHistory.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="text-sm">{new Date(item.fecha).toLocaleDateString("es-AR")}</TableCell>
+                      <TableCell className="text-sm">{item.sucursal}</TableCell>
+                      <TableCell className="text-right text-sm">{item.cantidad}</TableCell>
+                      <TableCell className="text-right text-sm font-medium">${parseFloat(item.precio_costo_momento).toFixed(2)}</TableCell>
+                      <TableCell className="text-right text-sm font-semibold text-emerald-600">${item.total.toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+        <ModalFooter>
+          <Button variant="ghost" onClick={closePriceHistoryModal}>
+            Cerrar
           </Button>
         </ModalFooter>
       </Modal>
