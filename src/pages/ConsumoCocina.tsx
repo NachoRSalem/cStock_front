@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Building2, ChevronLeft, ChevronRight, CookingPot, Plus, Trash2, Warehouse } from "lucide-react";
+import { ArrowLeft, Building2, ChevronLeft, ChevronRight, CookingPot, Plus, Trash2, UtensilsCrossed, Warehouse } from "lucide-react";
 import clsx from "clsx";
 
 import { listStock, type Stock } from "../api/stock";
 import { listSucursales, type Sucursal } from "../api/locations";
-import { createConsumo, listConsumos, deleteConsumo, type ConsumoCocina, type ConsumoItemCreate } from "../api/consumos";
+import { createConsumo, listConsumos, deleteConsumo, type ConsumoCocina, type ConsumoItemCreate, createProduccionVianda, listProduccionesVianda, deleteProduccionVianda, type ProduccionVianda, type ProduccionViandaItemCreate, crearViandaRapida } from "../api/consumos";
+import { listCategorias, type Categoria } from "../api/products";
+
 import { tokenStorage } from "../utils/storage";
 import {
   Alert,
@@ -16,6 +18,9 @@ import {
   CardHeader,
   CardTitle,
   ConfirmDialog,
+  Input,
+  Modal,
+  ModalFooter,
   ProductAutocomplete,
   Table,
   TableBody,
@@ -31,6 +36,13 @@ type LineaConsumo = {
   nombre: string;
   cantidad: string;
   sub_ubicacion_origen: number | null;
+};
+
+type LineaVianda = {
+  key: number;
+  producto: number | null;
+  nombre: string;
+  cantidad: string;
 };
 
 function fmtDate(iso: string) {
@@ -51,6 +63,7 @@ export default function ConsumoCocinaPage() {
   const sucursalSesion = tokenStorage.getSucursal();
 
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [stock, setStock] = useState<Stock[]>([]);
 
   const [fetching, setFetching] = useState(true);
@@ -71,6 +84,26 @@ export default function ConsumoCocinaPage() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; label: string } | null>(null);
 
+  // Viandas
+  const [lineasVianda, setLineasVianda] = useState<LineaVianda[]>([
+    { key: Date.now(), producto: null, nombre: "", cantidad: "" },
+  ]);
+  const [subDestinoVianda, setSubDestinoVianda] = useState<number | null>(null);
+
+  // Modal nueva vianda
+  const [showNewVianda, setShowNewVianda] = useState(false);
+  const [newViandaNombre, setNewViandaNombre] = useState("");
+  const [newViandaPrecio, setNewViandaPrecio] = useState("");
+  const [newViandaLoading, setNewViandaLoading] = useState(false);
+  const [newViandaLineaKey, setNewViandaLineaKey] = useState<number | null>(null);
+
+  // Historial producciones
+  const [producciones, setProducciones] = useState<ProduccionVianda[]>([]);
+  const [pagProd, setPagProd] = useState({ count: 0, next: null as string | null, previous: null as string | null });
+  const [paginaProd, setPaginaProd] = useState(1);
+  const [loadingProd, setLoadingProd] = useState(false);
+  const [deleteProdTarget, setDeleteProdTarget] = useState<{ id: number; label: string } | null>(null);
+
   useEffect(() => {
     loadInitial();
   }, []);
@@ -89,12 +122,18 @@ export default function ConsumoCocinaPage() {
     loadHistory();
   }, [paginaActual, ubicacionId]);
 
+  useEffect(() => {
+    if (!ubicacionId) return;
+    loadProducciones();
+  }, [paginaProd, ubicacionId]);
+
   async function loadInitial() {
     setFetching(true);
     setErr(null);
     try {
-      const sucData = await listSucursales();
+      const [sucData, catData] = await Promise.all([listSucursales(), listCategorias()]);
       setSucursales(sucData);
+      setCategorias(catData);
       if (!isAdmin && sucursalSesion) {
         setUbicacionId(sucursalSesion);
       }
@@ -128,6 +167,23 @@ export default function ConsumoCocinaPage() {
       setErr(e?.message ?? "Error cargando historial");
     } finally {
       setLoadingHistory(false);
+    }
+  }
+
+  async function loadProducciones() {
+    if (!ubicacionId) return;
+    setLoadingProd(true);
+    try {
+      const data = await listProduccionesVianda({
+        ubicacion: isAdmin ? ubicacionId : undefined,
+        page: paginaProd,
+      });
+      setProducciones(data.results);
+      setPagProd({ count: data.count, next: data.next, previous: data.previous });
+    } catch (e: any) {
+      setErr(e?.message ?? "Error cargando producciones");
+    } finally {
+      setLoadingProd(false);
     }
   }
 
@@ -239,12 +295,139 @@ export default function ConsumoCocinaPage() {
     }
   }
 
+  // --- Viandas ---
+
+  // Debe declararse ANTES de subUbicacionesSucursal que lo usa
   const ubicacionSeleccionada = useMemo(
     () => sucursales.find((s) => s.id === ubicacionId) ?? null,
     [sucursales, ubicacionId]
   );
 
+  const subUbicacionesSucursal = useMemo(
+    () => ubicacionSeleccionada?.sub_ubicaciones ?? [],
+    [ubicacionSeleccionada]
+  );
+
+  const categoriaViandaId = useMemo(
+    () => categorias.find((c) => c.nombre.toLowerCase() === "vianda")?.id ?? null,
+    [categorias]
+  );
+
+  function addLineaVianda() {
+    setLineasVianda((prev) => [
+      ...prev,
+      { key: Date.now() + prev.length, producto: null, nombre: "", cantidad: "" },
+    ]);
+  }
+
+  function removeLineaVianda(key: number) {
+    setLineasVianda((prev) => prev.filter((l) => l.key !== key));
+  }
+
+  function updateLineaVianda(key: number, patch: Partial<{ producto: number | null; nombre: string; cantidad: string }>) {
+    setLineasVianda((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  }
+
+  function openNewVianda(key: number) {
+    setNewViandaLineaKey(key);
+    setNewViandaNombre("");
+    setNewViandaPrecio("");
+    setErr(null);
+    setShowNewVianda(true);
+  }
+
+  async function handleCrearViandaRapida() {
+    if (!newViandaNombre.trim()) {
+      setErr("El nombre de la vianda es obligatorio.");
+      return;
+    }
+    const precio = parseFloat(newViandaPrecio);
+    if (!Number.isFinite(precio) || precio <= 0) {
+      setErr("Ingresá un precio de venta válido.");
+      return;
+    }
+
+    setNewViandaLoading(true);
+    setErr(null);
+    try {
+      const vianda = await crearViandaRapida({ nombre: newViandaNombre.trim(), precio_venta: precio });
+      if (newViandaLineaKey !== null) {
+        updateLineaVianda(newViandaLineaKey, { producto: vianda.id, nombre: vianda.nombre });
+      }
+      setOk(`Vianda "${vianda.nombre}" creada correctamente.`);
+      setShowNewVianda(false);
+    } catch (e: any) {
+      setErr(e?.message ?? "Error creando vianda");
+    } finally {
+      setNewViandaLoading(false);
+    }
+  }
+
+  async function handleGuardarViandas() {
+    if (!ubicacionId || !fecha || !subDestinoVianda) {
+      setErr("Completá sucursal, fecha y sub-ubicación destino.");
+      return;
+    }
+    if (lineasVianda.length === 0) {
+      setErr("Agregá al menos una vianda.");
+      return;
+    }
+
+    const items: ProduccionViandaItemCreate[] = [];
+    for (const ln of lineasVianda) {
+      if (!ln.producto) {
+        setErr("Todas las líneas deben tener un producto.");
+        return;
+      }
+      const cant = parseInt(ln.cantidad, 10);
+      if (!Number.isFinite(cant) || cant <= 0) {
+        setErr(`La cantidad de ${ln.nombre} debe ser un número entero mayor a 0.`);
+        return;
+      }
+      items.push({ producto: ln.producto, cantidad: cant });
+    }
+
+    setBusy(true);
+    setErr(null);
+    setOk(null);
+    try {
+      await createProduccionVianda({
+        ubicacion: ubicacionId,
+        sub_ubicacion_destino: subDestinoVianda,
+        fecha,
+        items,
+      });
+      setOk("Viandas registradas correctamente.");
+      setLineasVianda([{ key: Date.now(), producto: null, nombre: "", cantidad: "" }]);
+      setSubDestinoVianda(null);
+      setPaginaProd(1);
+      await loadProducciones();
+    } catch (e: any) {
+      setErr(e?.message ?? "Error registrando viandas");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteProduccion(id: number) {
+    setBusy(true);
+    setErr(null);
+    try {
+      await deleteProduccionVianda(id);
+      setOk("Producción eliminada.");
+      await loadProducciones();
+    } catch (e: any) {
+      setErr(e?.message ?? "Error eliminando producción");
+    } finally {
+      setBusy(false);
+      setDeleteProdTarget(null);
+    }
+  }
+
+  // ubicacionSeleccionada fue movido arriba (antes de subUbicacionesSucursal)
+
   const totalPaginas = useMemo(() => Math.max(1, Math.ceil(paginacion.count / 10)), [paginacion.count]);
+  const totalPaginasProd = useMemo(() => Math.max(1, Math.ceil(pagProd.count / 10)), [pagProd.count]);
 
   if (fetching) {
     return (
@@ -430,6 +613,220 @@ export default function ConsumoCocinaPage() {
         </CardBody>
       </Card>
 
+      {/* Registro de Viandas */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UtensilsCrossed className="h-5 w-5" />
+            Registrar viandas del día
+          </CardTitle>
+          <CardDescription>
+            Agregá viandas al stock de la sucursal. Las viandas deben existir en el catálogo con categoría "Vianda".
+          </CardDescription>
+        </CardHeader>
+        <CardBody className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">Sub-ubicación destino</label>
+            <select
+              value={subDestinoVianda ?? ""}
+              onChange={(e) => setSubDestinoVianda(Number(e.target.value) || null)}
+              className="w-full px-3.5 py-2.5 rounded-xl border text-sm bg-white text-neutral-900 border-neutral-300"
+            >
+              <option value="">Seleccionar...</option>
+              {subUbicacionesSucursal.map((sub) => (
+                <option key={sub.id} value={sub.id}>
+                  {sub.nombre} ({sub.tipo})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {lineasVianda.map((ln) => (
+            <div key={ln.key} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end border border-neutral-200 rounded-xl p-4">
+              <div className="md:col-span-6">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs text-neutral-600">Vianda</label>
+                  <button
+                    type="button"
+                    onClick={() => openNewVianda(ln.key)}
+                    className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                  >
+                    + Nueva Vianda
+                  </button>
+                </div>
+                <ProductAutocomplete
+                  value={ln.producto}
+                  selectedName={ln.nombre}
+                  categoria={categoriaViandaId ?? undefined}
+                  categoriaName="Vianda"
+                  onSelect={(p) => {
+                    if (p) {
+                      updateLineaVianda(ln.key, { producto: p.id, nombre: p.nombre });
+                    } else {
+                      updateLineaVianda(ln.key, { producto: null, nombre: "" });
+                    }
+                  }}
+                  placeholder="Buscar vianda..."
+                />
+              </div>
+
+              <div className="md:col-span-4">
+                <label className="block text-xs text-neutral-600 mb-1">Cantidad (unidades)</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={ln.cantidad}
+                  onChange={(e) => updateLineaVianda(ln.key, { cantidad: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border border-neutral-300 text-sm"
+                  placeholder="0"
+                />
+              </div>
+
+              <div className="md:col-span-2 flex items-center justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-600 hover:text-red-700"
+                  onClick={() => removeLineaVianda(ln.key)}
+                  disabled={lineasVianda.length === 1}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
+
+          <div className="flex items-center justify-between">
+            <Button type="button" size="sm" variant="outline" onClick={addLineaVianda}>
+              <Plus className="h-4 w-4" />
+              Agregar vianda
+            </Button>
+            <Button onClick={handleGuardarViandas} loading={busy} disabled={!ubicacionId || busy}>
+              Registrar viandas
+            </Button>
+          </div>
+        </CardBody>
+      </Card>
+
+      {/* Historial producciones */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Historial de producciones de vianda</CardTitle>
+          <CardDescription>
+            {pagProd.count} registro{pagProd.count !== 1 ? "s" : ""}
+          </CardDescription>
+        </CardHeader>
+        <CardBody className="p-0">
+          {loadingProd ? (
+            <div className="py-10 text-center text-neutral-500">Cargando...</div>
+          ) : producciones.length === 0 ? (
+            <div className="py-10 text-center text-neutral-500">No hay producciones registradas.</div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Viandas</TableHead>
+                      <TableHead className="text-right">Total unid.</TableHead>
+                      <TableHead className="text-right">Precio total est.</TableHead>
+                      {isAdmin && <TableHead className="text-center">Acciones</TableHead>}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {producciones.map((p) => {
+                      const totalUnidades = p.items.reduce((sum, it) => sum + it.cantidad, 0);
+                      const totalPrecio = p.items.reduce((sum, it) => sum + it.cantidad * parseFloat(it.precio_venta_momento), 0);
+                      return (
+                        <TableRow key={p.id}>
+                          <TableCell className="text-sm">{fmtDate(p.fecha)}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {p.items.map((it) => (
+                                <Badge key={it.id} variant="default">
+                                  {it.producto_nombre} x{it.cantidad}
+                                </Badge>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-neutral-900">{totalUnidades}</TableCell>
+                          <TableCell className="text-right font-semibold text-emerald-600">{money(totalPrecio)}</TableCell>
+                          {isAdmin && (
+                            <TableCell>
+                              <div className="flex items-center justify-center">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-red-600 hover:text-red-700"
+                                  onClick={() => setDeleteProdTarget({ id: p.id, label: `Producción del ${fmtDate(p.fecha)}` })}
+                                  disabled={busy}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {totalPaginasProd > 1 && (
+                <div className="flex flex-col gap-3 border-t border-neutral-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                  <div className="text-sm text-neutral-600">
+                    Mostrando <span className="font-medium">{producciones.length}</span> de{" "}
+                    <span className="font-medium">{pagProd.count}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPaginaProd((p) => Math.max(1, p - 1))}
+                      disabled={!pagProd.previous}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, totalPaginasProd) }, (_, i) => {
+                        let pageNum: number;
+                        if (totalPaginasProd <= 5) pageNum = i + 1;
+                        else if (paginaProd <= 3) pageNum = i + 1;
+                        else if (paginaProd >= totalPaginasProd - 2) pageNum = totalPaginasProd - 4 + i;
+                        else pageNum = paginaProd - 2 + i;
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setPaginaProd(pageNum)}
+                            className={clsx(
+                              "w-8 h-8 rounded-lg text-sm font-medium",
+                              paginaProd === pageNum ? "bg-primary-500 text-white" : "text-neutral-600 hover:bg-neutral-100"
+                            )}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPaginaProd((p) => Math.min(totalPaginasProd, p + 1))}
+                      disabled={!pagProd.next}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </CardBody>
+      </Card>
+
       {/* Historial */}
       <Card>
         <CardHeader>
@@ -451,8 +848,8 @@ export default function ConsumoCocinaPage() {
                     <TableRow>
                       <TableHead>Fecha</TableHead>
                       <TableHead>Productos</TableHead>
-                      <TableHead className="text-right">Costo total</TableHead>
-                      <TableHead className="text-center">Acciones</TableHead>
+                      {isAdmin && <TableHead className="text-right">Costo total</TableHead>}
+                      {isAdmin && <TableHead className="text-center">Acciones</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -468,11 +865,13 @@ export default function ConsumoCocinaPage() {
                             ))}
                           </div>
                         </TableCell>
-                        <TableCell className="text-right font-semibold text-neutral-900">
-                          {money(parseFloat(c.total_costo))}
-                        </TableCell>
-                        <TableCell>
-                          {isAdmin && (
+                        {isAdmin && (
+                          <TableCell className="text-right font-semibold text-neutral-900">
+                            {money(parseFloat(c.total_costo))}
+                          </TableCell>
+                        )}
+                        {isAdmin && (
+                          <TableCell>
                             <div className="flex items-center justify-center">
                               <Button
                                 variant="ghost"
@@ -484,8 +883,8 @@ export default function ConsumoCocinaPage() {
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
-                          )}
-                        </TableCell>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -556,6 +955,47 @@ export default function ConsumoCocinaPage() {
         variant="danger"
         loading={busy}
       />
+
+      <ConfirmDialog
+        open={!!deleteProdTarget}
+        onClose={() => setDeleteProdTarget(null)}
+        onConfirm={() => deleteProdTarget && handleDeleteProduccion(deleteProdTarget.id)}
+        title="Eliminar producción"
+        message={`¿Eliminar ${deleteProdTarget?.label}? El stock NO se revertirá automáticamente.`}
+        confirmText="Eliminar"
+        variant="danger"
+        loading={busy}
+      />
+
+      <Modal open={showNewVianda} onClose={() => setShowNewVianda(false)} title="Nueva Vianda" size="md">
+        <div className="space-y-4">
+          <Input
+            label="Nombre de la vianda"
+            value={newViandaNombre}
+            onChange={(e) => setNewViandaNombre(e.target.value)}
+            placeholder="Ej: Guiso de lentejas"
+          />
+          <Input
+            label="Precio de venta"
+            type="number"
+            step="0.01"
+            value={newViandaPrecio}
+            onChange={(e) => setNewViandaPrecio(e.target.value)}
+            placeholder="0.00"
+          />
+          <p className="text-xs text-neutral-500">
+            Se creará con categoría "Vianda", conservación ambiente y costo $0.
+          </p>
+        </div>
+        <ModalFooter>
+          <Button variant="ghost" onClick={() => setShowNewVianda(false)} disabled={newViandaLoading}>
+            Cancelar
+          </Button>
+          <Button onClick={handleCrearViandaRapida} loading={newViandaLoading}>
+            Crear vianda
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   );
 }

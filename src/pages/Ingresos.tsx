@@ -28,7 +28,7 @@ import {
   TableCell,
   ConfirmDialog,
 } from "../components/ui";
-import { Plus, Edit2, Trash2, DollarSign, TrendingUp, TrendingDown, Scale } from "lucide-react";
+import { Plus, Edit2, Trash2, DollarSign, TrendingUp, TrendingDown, Scale, Settings } from "lucide-react";
 
 function money(n: number) {
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n);
@@ -50,10 +50,21 @@ export default function Ingresos() {
     monto: "",
     fecha: new Date().toISOString().split("T")[0],
     descripcion: "",
+    medio_pago: "efectivo",
   });
 
   const [showDelete, setShowDelete] = useState(false);
   const [deleteData, setDeleteData] = useState<{ id: number; descripcion: string } | null>(null);
+
+  const [showSettings, setShowSettings] = useState(false);
+  const [configCuotaRapida, setConfigCuotaRapida] = useState(() => {
+    const stored = localStorage.getItem("cuotaRapidaConfig");
+    if (stored) {
+      try { return JSON.parse(stored); } catch { /* ignore */ }
+    }
+    return { monto: "", descripcion: "" };
+  });
+  const [settingsForm, setSettingsForm] = useState({ monto: "", descripcion: "" });
 
   useEffect(() => {
     loadData();
@@ -88,6 +99,7 @@ export default function Ingresos() {
         monto: ing.monto,
         fecha: ing.fecha,
         descripcion: ing.descripcion,
+        medio_pago: ing.medio_pago || "efectivo",
       });
     } else {
       setEditing(null);
@@ -95,9 +107,34 @@ export default function Ingresos() {
         monto: "",
         fecha: new Date().toISOString().split("T")[0],
         descripcion: "",
+        medio_pago: "efectivo",
       });
     }
     setShowForm(true);
+  }
+
+  function openRapida() {
+    setErr(null);
+    setEditing(null);
+    setForm({
+      monto: configCuotaRapida.monto || "",
+      fecha: new Date().toISOString().split("T")[0],
+      descripcion: configCuotaRapida.descripcion || "",
+      medio_pago: "efectivo",
+    });
+    setShowForm(true);
+  }
+
+  function openSettings() {
+    setSettingsForm({ ...configCuotaRapida });
+    setShowSettings(true);
+  }
+
+  function saveSettings() {
+    const config = { monto: settingsForm.monto, descripcion: settingsForm.descripcion };
+    localStorage.setItem("cuotaRapidaConfig", JSON.stringify(config));
+    setConfigCuotaRapida(config);
+    setShowSettings(false);
   }
 
   function closeForm() {
@@ -258,8 +295,15 @@ export default function Ingresos() {
         </CardBody>
       </Card>
 
-      {/* Botón nuevo */}
-      <div className="flex justify-end">
+      {/* Botones */}
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={openSettings} title="Configurar cuota rápida">
+          <Settings className="h-4 w-4" />
+        </Button>
+        <Button onClick={openRapida} size="lg" variant="secondary">
+          <Plus className="h-5 w-5" />
+          Cargar cuota rápida
+        </Button>
         <Button onClick={() => openForm()} size="lg">
           <Plus className="h-5 w-5" />
           Cargar ingreso
@@ -282,6 +326,7 @@ export default function Ingresos() {
                   <TableRow>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Descripción</TableHead>
+                    <TableHead>Medio de Pago</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
                     <TableHead className="text-center">Acciones</TableHead>
                   </TableRow>
@@ -291,6 +336,9 @@ export default function Ingresos() {
                     <TableRow key={ing.id}>
                       <TableCell className="text-sm">{ing.fecha}</TableCell>
                       <TableCell className="text-sm">{ing.descripcion || "—"}</TableCell>
+                      <TableCell className="text-sm">
+                        {ing.medio_pago === "mercado_pago" ? "Mercado Pago" : ing.medio_pago === "cuenta_bancaria" ? "Cuenta Bancaria" : "Efectivo"}
+                      </TableCell>
                       <TableCell className="text-right font-semibold text-emerald-600">
                         {money(parseFloat(ing.monto))}
                       </TableCell>
@@ -346,6 +394,18 @@ export default function Ingresos() {
             onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
             placeholder="Ej: Cuota comedor abril"
           />
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">Medio de Pago</label>
+            <select
+              className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm bg-white"
+              value={form.medio_pago || "efectivo"}
+              onChange={(e) => setForm({ ...form, medio_pago: e.target.value })}
+            >
+              <option value="efectivo">Efectivo</option>
+              <option value="mercado_pago">Mercado Pago</option>
+              <option value="cuenta_bancaria">Cuenta Bancaria</option>
+            </select>
+          </div>
         </div>
         <ModalFooter>
           <Button variant="ghost" onClick={closeForm} disabled={busy}>
@@ -370,6 +430,34 @@ export default function Ingresos() {
         variant="danger"
         loading={busy}
       />
+
+      {/* Modal configuración cuota rápida */}
+      <Modal open={showSettings} onClose={() => setShowSettings(false)} title="Configurar cuota rápida" size="md">
+        <div className="space-y-4">
+          <Input
+            label="Monto predeterminado"
+            type="number"
+            step="0.01"
+            value={settingsForm.monto}
+            onChange={(e) => setSettingsForm({ ...settingsForm, monto: e.target.value })}
+            placeholder="0.00"
+          />
+          <Input
+            label="Descripción predeterminada"
+            value={settingsForm.descripcion}
+            onChange={(e) => setSettingsForm({ ...settingsForm, descripcion: e.target.value })}
+            placeholder="Ej: Cuota comedor"
+          />
+        </div>
+        <ModalFooter>
+          <Button variant="ghost" onClick={() => setShowSettings(false)}>
+            Cancelar
+          </Button>
+          <Button onClick={saveSettings}>
+            Guardar
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   );
 }

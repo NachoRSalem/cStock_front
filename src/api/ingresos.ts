@@ -6,6 +6,7 @@ export type Ingreso = {
   fecha: string;
   descripcion: string;
   tipo: string;
+  medio_pago: string;
   registrado_por: number;
   registrado_por_nombre: string;
   creado_en: string;
@@ -16,6 +17,7 @@ export type IngresoCreateUpdate = {
   fecha: string;
   descripcion?: string;
   tipo?: string;
+  medio_pago?: string;
 };
 
 export type BalanceData = {

@@ -11,6 +11,8 @@ type ProductAutocompleteProps = {
   disabled?: boolean;
   excludeIds?: number[];
   onlyFabricable?: boolean;
+  categoria?: number;
+  categoriaName?: string;  // filtra por nombre de categoría en el cliente
   className?: string;
   allowClear?: boolean;
 };
@@ -23,6 +25,8 @@ export function ProductAutocomplete({
   disabled,
   excludeIds = [],
   onlyFabricable,
+  categoria,
+  categoriaName,
   className,
   allowClear = true,
 }: ProductAutocompleteProps) {
@@ -32,12 +36,35 @@ export function ProductAutocomplete({
   const [options, setOptions] = useState<Producto[]>([]);
   const [display, setDisplay] = useState("");
 
-  const blurTimerRef = useRef<number | null>(null);
+  // Ref del wrapper completo (input + dropdown)
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Serializado ANTES de los useEffect que lo usan como dep.
+  // Cada render crea un nuevo [] por defecto (nueva referencia),
+  // lo que haría que el useEffect de búsqueda se ejecute en loop.
+  // Un string primitivo es estable entre renders si el contenido no cambia.
+  const excludeIdsKey = excludeIds.join(",");
 
   useEffect(() => {
     setDisplay(selectedName ?? "");
   }, [selectedName, value]);
 
+  // Cerrar solo cuando el clic ocurre FUERA del wrapper completo.
+  // Esto permite scrollear el dropdown sin que se cierre.
+  useEffect(() => {
+    if (!open) return;
+
+    function handleOutsideClick(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [open]);
+
+  // Buscar productos con debounce al abrir o cambiar el query
   useEffect(() => {
     if (!open) return;
 
@@ -48,12 +75,19 @@ export function ProductAutocomplete({
           search: query || undefined,
           limit: 20,
           es_fabricable: onlyFabricable,
+          categoria: categoria,
         });
 
-        const filtered = data.filter((p) => {
+        let filtered = data.filter((p) => {
           if (value && p.id === value) return true;
           return !excludeIds.includes(p.id);
         });
+        // Filtro cliente por nombre de categoría (sin necesidad de conocer el ID)
+        if (categoriaName) {
+          filtered = filtered.filter(
+            (p) => p.categoria_nombre.toLowerCase() === categoriaName.toLowerCase()
+          );
+        }
 
         setOptions(filtered);
       } finally {
@@ -62,12 +96,12 @@ export function ProductAutocomplete({
     }, 250);
 
     return () => window.clearTimeout(timer);
-  }, [open, query, excludeIds, value, onlyFabricable]);
+  }, [open, query, excludeIdsKey, value, onlyFabricable, categoria, categoriaName]);
 
   const hasResults = useMemo(() => options.length > 0, [options]);
 
   return (
-    <div className={`relative ${className ?? ""}`}>
+    <div ref={wrapperRef} className={`relative ${className ?? ""}`}>
       <div className="flex items-center gap-2">
         <input
           value={open ? query : display}
@@ -78,9 +112,6 @@ export function ProductAutocomplete({
           onFocus={() => {
             setOpen(true);
             setQuery("");
-          }}
-          onBlur={() => {
-            blurTimerRef.current = window.setTimeout(() => setOpen(false), 120);
           }}
           placeholder={placeholder}
           disabled={disabled}
@@ -116,9 +147,6 @@ export function ProductAutocomplete({
               <button
                 key={p.id}
                 type="button"
-                onMouseDown={() => {
-                  if (blurTimerRef.current) window.clearTimeout(blurTimerRef.current);
-                }}
                 onClick={() => {
                   onSelect(p);
                   setDisplay(p.nombre);
