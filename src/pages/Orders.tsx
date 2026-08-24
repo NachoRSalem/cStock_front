@@ -13,6 +13,7 @@ import {
   getDisponibilidadSucursales,
   type Pedido, 
   type PedidoItemCreate,
+  type PedidoAprobarItem,
   type DisponibilidadSucursal,
 } from "../api/orders";
 import { type Producto } from "../api/products";
@@ -644,18 +645,18 @@ export default function Orders() {
 
     try {
       // Construir payload para backend
-      const items = pedidoToApprove.items.map(item => {
+      const items: PedidoAprobarItem[] = pedidoToApprove.items.map(item => {
         const config = itemOrigenConfig[item.id];
 
         if (config.tipo === 'distribuidor') {
           return {
             id: item.id,
-            origen_tipo: 'distribuidor'
+            origen_tipo: 'distribuidor' as const
           };
         } else {
           return {
             id: item.id,
-            origen_tipo: 'sucursal',
+            origen_tipo: 'sucursal' as const,
             origen_sucursal: config.sucursalOrigen,
             sub_ubicaciones_origen: config.subUbicaciones.map(ub => ({
               sub_ubicacion: ub.sub_ubicacion,
@@ -1203,7 +1204,7 @@ export default function Orders() {
                                   }
                                   setItems(newItems);
                                 }}
-                                excludeIds={items.filter((it, i) => i !== index).map((it) => it.producto)}
+                                excludeIds={items.filter((_, i) => i !== index).map((it) => it.producto)}
                                 placeholder="Escribí para buscar producto..."
                               />
                             </div>
@@ -1351,7 +1352,7 @@ export default function Orders() {
                               }
                               setItems(newItems);
                             }}
-                            excludeIds={items.filter((it, i) => i !== index).map((it) => it.producto)}
+                            excludeIds={items.filter((_, i) => i !== index).map((it) => it.producto)}
                             placeholder="Escribí para buscar producto..."
                           />
                           
@@ -1582,7 +1583,6 @@ export default function Orders() {
                                 <div key={item.id} className="flex items-center justify-between text-xs bg-neutral-50 px-2 py-1 rounded">
                                   <span className="text-neutral-600">{item.producto_nombre}</span>
                                   <Badge
-                                    size="sm"
                                     variant={esDistribuidor ? "info" : "success"}
                                   >
                                     {esDistribuidor ? "Distribuidor" : "Sucursal"}

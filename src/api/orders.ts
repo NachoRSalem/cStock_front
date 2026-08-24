@@ -79,7 +79,7 @@ export function enviarARevision(id: number) {
   return apiFetch<{ status: string }>(`/api/inventory/pedidos/${id}/enviar_a_revision/`, { method: "POST" });
 }
 
-export function aprobarPedido(id: number, body: PedidoAprobarBody) {
+export function aprobarPedido(id: number, body: PedidoAprobarBody = {}) {
   return apiFetch<{ status: string }>(`/api/inventory/pedidos/${id}/aprobar/`, { 
     method: "POST", 
     body 

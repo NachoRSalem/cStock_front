@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Factory,
-  Package,
   Warehouse,
 } from "lucide-react";
 import clsx from "clsx";

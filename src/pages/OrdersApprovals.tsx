@@ -223,12 +223,14 @@ export default function OrdersApprovals() {
                       sum + (item.cantidad * parseFloat(item.precio_costo_momento)), 0
                     );
                     
-                    const estadoConfig = {
+                    const estadoConfig: Record<string, { emoji: string; text: string; color: string }> = {
                       borrador: { emoji: "📝", text: "Borrador", color: "#757575" },
+                      pendiente: { emoji: "⏳", text: "Pendiente", color: "#f57c00" },
                       aprobado: { emoji: "✅", text: "Aprobado", color: "#388e3c" },
                       recibido: { emoji: "📦", text: "Recibido", color: "#1976d2" },
                       rechazado: { emoji: "❌", text: "Rechazado", color: "#d32f2f" }
-                    }[pedido.estado] || { emoji: "", text: pedido.estado, color: "#757575" };
+                    };
+                    const config = estadoConfig[pedido.estado] || { emoji: "", text: pedido.estado, color: "#757575" };
 
                     return (
                       <tr key={pedido.id} style={{ borderBottom: "1px solid #f0f0f0" }}>
@@ -245,12 +247,12 @@ export default function OrdersApprovals() {
                           <span style={{ 
                             padding: "0.25rem 0.75rem", 
                             borderRadius: "12px", 
-                            backgroundColor: estadoConfig.color + "20",
-                            color: estadoConfig.color,
+                            backgroundColor: config.color + "20",
+                            color: config.color,
                             fontSize: "0.875rem",
                             fontWeight: 500
                           }}>
-                            {estadoConfig.emoji} {estadoConfig.text}
+                            {config.emoji} {config.text}
                           </span>
                         </td>
                         <td style={{ padding: "0.75rem", textAlign: "right", fontWeight: 500 }}>

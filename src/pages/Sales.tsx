@@ -19,7 +19,6 @@ import {
   ShoppingCart, 
   Plus, 
   Trash2, 
-  Search, 
   DollarSign, 
   Package, 
   MapPin,
@@ -86,7 +85,6 @@ type ScanSelectionState = {
 
 export default function Sales() {
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
-  const [productosCache, setProductosCache] = useState<Record<number, Producto>>({});
   const [stock, setStock] = useState<Stock[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [barcodeInput, setBarcodeInput] = useState("");
@@ -105,7 +103,6 @@ export default function Sales() {
   const [scanSelection, setScanSelection] = useState<ScanSelectionState | null>(null);
   const [showScanSelectionModal, setShowScanSelectionModal] = useState(false);
 
-  const session = tokenStorage.getSession();
   const sucursal = tokenStorage.getSucursal();
 
   useEffect(() => {
@@ -156,8 +153,6 @@ export default function Sales() {
   };
 
   const addToCart = (producto: Producto, stockItem: Stock) => {
-    setProductosCache((prev) => ({ ...prev, [producto.id]: producto }));
-
     const existingItem = cart.find(
       item => item.producto === producto.id && 
              item.sub_ubicacion_origen === stockItem.sub_ubicacion &&
@@ -223,11 +218,6 @@ export default function Sales() {
 
     addToCart(producto, stockItem);
     setScanInfo(`Escaneado: ${producto.nombre}`);
-  };
-
-  const getProductoForStock = (productoId: number): Producto | null => {
-    if (selectedProduct?.id === productoId) return selectedProduct;
-    return productosCache[productoId] ?? null;
   };
 
   const handleSelectScanStockOption = (stockId: number) => {
@@ -391,9 +381,6 @@ export default function Sales() {
                 selectedName={selectedProduct?.nombre ?? ""}
                 onSelect={(product) => {
                   setSelectedProduct(product);
-                  if (product) {
-                    setProductosCache((prev) => ({ ...prev, [product.id]: product }));
-                  }
                 }}
                 placeholder="Buscar producto por nombre o SKU..."
               />
