@@ -133,20 +133,15 @@ export default function Orders() {
       ]);
       setPedidos(pedidosData);
       setSucursales(sucursalesData);
-      
-      // Debug: mostrar datos de sesión
-      console.log('Session data:', session);
-      console.log('Sucursales cargadas:', sucursalesData);
-      
+
       // Si es usuario de sucursal, auto-seleccionar su sucursal
       if (!isAdmin && session?.sucursal) {
         // Manejar tanto número como string (por compatibilidad con sesiones antiguas)
-        const sucursalId = typeof session.sucursal === 'number' 
-          ? session.sucursal 
+        const sucursalId = typeof session.sucursal === 'number'
+          ? session.sucursal
           : parseInt(session.sucursal as any, 10);
-        
+
         if (!isNaN(sucursalId)) {
-          console.log('Setting destino to:', sucursalId);
           setDestino(sucursalId);
         }
       }
@@ -197,7 +192,6 @@ export default function Orders() {
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
     setItems(newItems);
-    console.log('Items actualizados:', newItems);
   }
 
   async function onCreate() {
@@ -290,6 +284,7 @@ export default function Orders() {
               es_fabricable: false,
               sku: null,
               dias_caducidad: null,
+              unidad_medida: null,
             };
           }
         });
@@ -1225,9 +1220,9 @@ export default function Orders() {
                               <Input
                                 type="number" 
                                 value={item.precio_costo_momento}
-                                readOnly
-                                disabled
-                                className="bg-neutral-50"
+                                onChange={(e) => updateItem(index, "precio_costo_momento", e.target.value)}
+                                step="0.01"
+                                placeholder="0.00"
                               />
                             </div>
                           </div>
@@ -1372,9 +1367,9 @@ export default function Orders() {
                               <Input
                                 type="number" 
                                 value={item.precio_costo_momento}
-                                readOnly
-                                disabled
-                                className="bg-neutral-50"
+                                onChange={(e) => updateItem(index, "precio_costo_momento", e.target.value)}
+                                step="0.01"
+                                placeholder="0.00"
                               />
                             </div>
                           </div>

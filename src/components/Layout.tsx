@@ -1,7 +1,9 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { PageTransition } from "./PageTransition";
 import { tokenStorage } from "../utils/storage";
 import { useState, useMemo, useEffect } from "react";
 import { listPedidos } from "../api/orders";
+import { switchAccount } from "../api/auth";
 import clsx from "clsx";
 import {
   Home,
@@ -9,7 +11,6 @@ import {
   Package,
   FileText,
   ShoppingCart,
-  Factory,
   BarChart3,
   Users,
   Warehouse,
@@ -18,7 +19,11 @@ import {
   Menu,
   X,
   ChevronLeft,
+  Repeat,
+  Wallet,
+  CookingPot,
 } from "lucide-react";
+import { ConfirmDialog } from "./ui/ConfirmDialog";
 
 type NavItem = {
   to: string;
@@ -93,14 +98,18 @@ function NavLink({
 
 export function Layout() {
   const nav = useNavigate();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [pedidosPendientes, setPedidosPendientes] = useState(0);
+  const [showSwitchDialog, setShowSwitchDialog] = useState(false);
+  const [switchLoading, setSwitchLoading] = useState(false);
 
   const role = tokenStorage.getRole();
   const username = tokenStorage.getUsername();
   const sucursal = tokenStorage.getSucursal();
   const session = tokenStorage.getSession();
+  const cuentaPareada = tokenStorage.getCuentaPareada();
 
   // Cargar pedidos pendientes
   useEffect(() => {
@@ -141,17 +150,18 @@ export function Layout() {
       { to: "/admin/locations", label: "Sucursales", icon: <MapPin className="h-5 w-5" />, roles: ["admin"] },
       { to: "/admin/stock", label: "Stock Global", icon: <Warehouse className="h-5 w-5" />, roles: ["admin"] },
       { to: "/admin/products", label: "Productos", icon: <Package className="h-5 w-5" />, roles: ["admin"] },
-      { to: "/admin/manufacture", label: "Fabricación", icon: <Factory className="h-5 w-5" />, roles: ["admin"] },
+      { to: "/admin/consumo-cocina", label: "Consumo Cocina", icon: <CookingPot className="h-5 w-5" />, roles: ["admin"] },
       { to: "/admin/orders", label: "Pedidos", icon: <FileText className="h-5 w-5" />, roles: ["admin"] },
       { to: "/admin/sales", label: "Ventas", icon: <ShoppingCart className="h-5 w-5" />, roles: ["admin"] },
       { to: "/admin/reports", label: "Reportes", icon: <BarChart3 className="h-5 w-5" />, roles: ["admin"] },
+      { to: "/admin/ingresos", label: "Ingresos", icon: <Wallet className="h-5 w-5" />, roles: ["admin"] },
       { to: "/admin/users", label: "Usuarios", icon: <Users className="h-5 w-5" />, roles: ["admin"] },
 
       // Sucursal
       { to: "/sucursal/stock", label: "Mi stock", icon: <Warehouse className="h-5 w-5" />, roles: ["sucursal"] },
       { to: "/sucursal/orders", label: "Mis pedidos", icon: <ClipboardCheck className="h-5 w-5" />, roles: ["sucursal"] },
       { to: "/sucursal/sales", label: "Registrar venta", icon: <ShoppingCart className="h-5 w-5" />, roles: ["sucursal"] },
-      { to: "/sucursal/manufacture", label: "Fabricación", icon: <Factory className="h-5 w-5" />, roles: ["sucursal"] },
+      { to: "/sucursal/consumo-cocina", label: "Consumo Cocina", icon: <CookingPot className="h-5 w-5" />, roles: ["sucursal"] },
       { to: "/sucursal/ventas", label: "Mis ventas", icon: <BarChart3 className="h-5 w-5" />, roles: ["sucursal"] },
     ],
     []
@@ -162,6 +172,31 @@ export function Layout() {
   function logout() {
     tokenStorage.clear();
     nav("/login");
+  }
+
+  async function handleSwitchAccount() {
+    const refresh = tokenStorage.getRefresh();
+    if (!refresh) return;
+
+    setSwitchLoading(true);
+    try {
+      const newSession = await switchAccount(refresh);
+      tokenStorage.setSession({
+        access: newSession.access,
+        refresh: newSession.refresh,
+        rol: newSession.rol,
+        sucursal: newSession.sucursal,
+        username: newSession.username,
+        cuenta_pareada: newSession.cuenta_pareada,
+      });
+      setShowSwitchDialog(false);
+      nav(0);
+    } catch (err) {
+      console.error("Error switching account:", err);
+      alert("Error al cambiar de cuenta");
+    } finally {
+      setSwitchLoading(false);
+    }
   }
 
   const closeMobileSidebar = () => {
@@ -319,6 +354,18 @@ export function Layout() {
           </div>
 
           <div className="flex items-center gap-3">
+            {cuentaPareada && (
+              <button
+                onClick={() => setShowSwitchDialog(true)}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors border border-amber-200"
+                title={`Cambiar a ${cuentaPareada}`}
+              >
+                <Repeat className="h-4 w-4" />
+                <span className="hidden sm:inline text-xs font-medium">
+                  Cambiar a {cuentaPareada}
+                </span>
+              </button>
+            )}
             <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-neutral-100">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-xs font-medium text-neutral-700">En línea</span>
@@ -329,10 +376,24 @@ export function Layout() {
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto custom-scrollbar">
           <div className="mx-auto max-w-[1600px] p-3 sm:p-4 lg:p-6">
-            <Outlet />
+            <PageTransition key={location.pathname}>
+              <Outlet />
+            </PageTransition>
           </div>
         </main>
       </div>
+
+      <ConfirmDialog
+        open={showSwitchDialog}
+        onClose={() => setShowSwitchDialog(false)}
+        onConfirm={handleSwitchAccount}
+        title="Cambiar de cuenta"
+        message={`Si cambias a ${cuentaPareada}, se perderá el progreso de cualquier operación que estés realizando (ventas, pedidos, etc.). ¿Continuar?`}
+        confirmText={`Cambiar a ${cuentaPareada}`}
+        cancelText="Cancelar"
+        variant="warning"
+        loading={switchLoading}
+      />
     </div>
   );
 }

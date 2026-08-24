@@ -16,6 +16,7 @@ export type Producto = {
   es_fabricable: boolean;
   sku: string | null;
   dias_caducidad: number | null;
+  unidad_medida: string | null;
 };
 
 export type ProductoCreateUpdate = {
@@ -27,6 +28,7 @@ export type ProductoCreateUpdate = {
   es_fabricable: boolean;
   sku?: string | null;
   dias_caducidad?: number | null;
+  unidad_medida?: string | null;
 };
 
 export type CategoriaCreateUpdate = {
