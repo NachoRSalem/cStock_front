@@ -1,6 +1,9 @@
 import { tokenStorage } from "../utils/storage";
 
-const rawBase = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "";
+let rawBase = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "";
+if (rawBase && !rawBase.startsWith("http://") && !rawBase.startsWith("https://")) {
+  rawBase = `https://${rawBase}`;
+}
 const API_BASE = rawBase.replace(/\/$/, "");
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
