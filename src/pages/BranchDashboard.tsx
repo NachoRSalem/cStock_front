@@ -19,28 +19,32 @@ export default function BranchDashboard() {
       title: "Mi Stock",
       description: "Ver inventario disponible en tu sucursal",
       link: "/sucursal/stock",
-      color: "primary",
+      iconBg: "bg-blue-50",
+      iconColor: "text-blue-600",
     },
     {
       icon: <ClipboardCheck className="h-5 w-5" />,
       title: "Mis Pedidos",
       description: "Gestionar pedidos de mercadería",
       link: "/sucursal/orders",
-      color: "blue",
+      iconBg: "bg-amber-50",
+      iconColor: "text-amber-600",
     },
     {
       icon: <TruckIcon className="h-5 w-5" />,
-      title: "Recibir Pedido",
-      description: "Confirmar recepción de mercadería",
-      link: "/sucursal/receive",
-      color: "orange",
-    },
-    {
-      icon: <ShoppingCart className="h-5 w-5" />,
       title: "Registrar Venta",
       description: "Registrar nueva transacción de venta",
       link: "/sucursal/sales",
-      color: "emerald",
+      iconBg: "bg-emerald-50",
+      iconColor: "text-emerald-600",
+    },
+    {
+      icon: <ShoppingCart className="h-5 w-5" />,
+      title: "Mis Ventas",
+      description: "Ver historial de ventas realizadas",
+      link: "/sucursal/ventas",
+      iconBg: "bg-purple-50",
+      iconColor: "text-purple-600",
     },
   ];
 
@@ -69,12 +73,8 @@ export default function BranchDashboard() {
           <Link key={feature.link} to={feature.link}>
             <Card hover className="h-full transition-all hover:border-primary-300">
               <CardBody>
-                <div
-                  className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 bg-${feature.color}-100`}
-                >
-                  <span className={`text-${feature.color}-600`}>
-                    {feature.icon}
-                  </span>
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${feature.iconBg}`}>
+                  <span className={feature.iconColor}>{feature.icon}</span>
                 </div>
                 <h3 className="text-lg font-semibold text-neutral-900 mb-2">
                   {feature.title}

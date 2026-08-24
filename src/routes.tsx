@@ -15,10 +15,14 @@ import Sales from "./pages/Sales";
 import AdminSalesView from "./pages/AdminSalesView";
 import SucursalSalesView from "./pages/SucursalSalesView";
 import Products from "./pages/Products";
+import Manufacture from "./pages/Manufacture";
+import ManufactureHistory from "./pages/ManufactureHistory";
 
 import Users from "./pages/Users";
 import Stock from "./pages/Stock";
 import AdminStockView from "./pages/AdminStockView";
+import Ingresos from "./pages/Ingresos";
+import ConsumoCocina from "./pages/ConsumoCocina";
 import NotFound from "./pages/NotFound";
 
 export const router = createBrowserRouter([
@@ -39,7 +43,11 @@ export const router = createBrowserRouter([
       { path: "admin/sales", element: <AdminSalesView /> },
       { path: "admin/reports", element: <Reports /> },
       { path: "admin/users", element: <Users /> },
+      { path: "admin/ingresos", element: <Ingresos /> },
       { path: "admin/products", element: <Products /> },
+      { path: "admin/manufacture", element: <Manufacture /> },
+      { path: "admin/manufacture-history", element: <ManufactureHistory /> },
+      { path: "admin/consumo-cocina", element: <ConsumoCocina /> },
 
       // SUCURSAL
       { path: "sucursal", element: <BranchDashboard /> },
@@ -47,8 +55,9 @@ export const router = createBrowserRouter([
       { path: "sucursal/orders", element: <Orders /> },
       { path: "sucursal/sales", element: <Sales /> },
       { path: "sucursal/ventas", element: <SucursalSalesView /> },
-
-
+      { path: "sucursal/manufacture", element: <Manufacture /> },
+      { path: "sucursal/manufacture-history", element: <ManufactureHistory /> },
+      { path: "sucursal/consumo-cocina", element: <ConsumoCocina /> },
 
       // 404
       { path: "*", element: <NotFound /> },

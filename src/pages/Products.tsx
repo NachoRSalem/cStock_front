@@ -1,5 +1,5 @@
 // src/pages/Products.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { 
   listProductos, 
   listCategorias, 
@@ -15,7 +15,7 @@ import {
   type CategoriaCreateUpdate
 } from "../api/products";
 import { listSucursales, type Sucursal } from "../api/locations";
-import { listStock, updateStock, createStock, type Stock } from "../api/stock";
+import { listStock, updateStock, createStock, getPrecioHistorico, type Stock, type PrecioHistoricoItem } from "../api/stock";
 import { tokenStorage } from "../utils/storage";
 import { 
   Card, 
@@ -68,9 +68,15 @@ export default function Products() {
     tipo_conservacion: "ambiente",
     precio_venta: "",
     costo_compra: "",
+    es_fabricable: false,
     sku: "",
-    dias_caducidad: null
+    dias_caducidad: null,
+    unidad_medida: ""
   });
+  const [barcodeScanInput, setBarcodeScanInput] = useState("");
+  const [barcodeScanInfo, setBarcodeScanInfo] = useState<string | null>(null);
+  const [productFormErr, setProductFormErr] = useState<string | null>(null);
+  const barcodeScanRef = useRef<HTMLInputElement | null>(null);
   
   // Formulario categoría
   const [showCatForm, setShowCatForm] = useState(false);
@@ -90,6 +96,12 @@ export default function Products() {
   const [selectedSucursalForStock, setSelectedSucursalForStock] = useState<number | null>(null);
   const [stockItems, setStockItems] = useState<Stock[]>([]);
   const [stockUpdates, setStockUpdates] = useState<Record<number, number>>({});
+
+  // Estados para modal de historial de precios
+  const [showPriceHistoryModal, setShowPriceHistoryModal] = useState(false);
+  const [selectedProductForPriceHistory, setSelectedProductForPriceHistory] = useState<Producto | null>(null);
+  const [priceHistory, setPriceHistory] = useState<PrecioHistoricoItem[]>([]);
+  const [loadingPriceHistory, setLoadingPriceHistory] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -120,6 +132,9 @@ export default function Products() {
   });
 
   function openProductForm(product?: Producto) {
+    setBarcodeScanInput("");
+    setBarcodeScanInfo(null);
+    setProductFormErr(null);
     if (product) {
       setEditingProduct(product);
       setProductForm({
@@ -128,8 +143,10 @@ export default function Products() {
         tipo_conservacion: product.tipo_conservacion,
         precio_venta: product.precio_venta,
         costo_compra: product.costo_compra,
+        es_fabricable: product.es_fabricable,
         sku: product.sku || "",
-        dias_caducidad: product.dias_caducidad
+        dias_caducidad: product.dias_caducidad,
+        unidad_medida: product.unidad_medida || ""
       });
     } else {
       setEditingProduct(null);
@@ -139,8 +156,10 @@ export default function Products() {
         tipo_conservacion: "ambiente",
         precio_venta: "",
         costo_compra: "",
+        es_fabricable: false,
         sku: "",
-        dias_caducidad: null
+        dias_caducidad: null,
+        unidad_medida: ""
       });
     }
     setShowProductForm(true);
@@ -149,26 +168,80 @@ export default function Products() {
   function closeProductForm() {
     setShowProductForm(false);
     setEditingProduct(null);
+    setBarcodeScanInput("");
+    setBarcodeScanInfo(null);
+    setProductFormErr(null);
+  }
+
+  function applyScannedBarcode(rawValue: string) {
+    const scanned = rawValue.trim();
+    if (!scanned) return;
+
+    setErr(null);
+    setProductFormErr(null);
+    setBarcodeScanInfo(null);
+
+    const duplicated = productos.find((p) => {
+      if (!p.sku) return false;
+      if (editingProduct && p.id === editingProduct.id) return false;
+      return p.sku.trim().toLowerCase() === scanned.toLowerCase();
+    });
+
+    if (duplicated) {
+      setProductFormErr(`El código ${scanned} ya está asignado al producto "${duplicated.nombre}"`);
+      return;
+    }
+
+    setProductForm((prev) => ({ ...prev, sku: scanned }));
+    setBarcodeScanInfo(`Código capturado: ${scanned}`);
+  }
+
+  function handleScanSubmit() {
+    const code = barcodeScanInput.trim();
+    if (!code) return;
+    applyScannedBarcode(code);
+    setBarcodeScanInput("");
+    barcodeScanRef.current?.focus();
   }
 
   async function handleSaveProduct() {
     if (!productForm.nombre || !productForm.categoria) {
-      setErr("Completá todos los campos obligatorios");
+      setProductFormErr("Completá todos los campos obligatorios");
       return;
+    }
+
+    const skuNormalized = (productForm.sku ?? "").trim();
+    if (skuNormalized) {
+      const duplicated = productos.find((p) => {
+        if (!p.sku) return false;
+        if (editingProduct && p.id === editingProduct.id) return false;
+        return p.sku.trim().toLowerCase() === skuNormalized.toLowerCase();
+      });
+
+      if (duplicated) {
+        setProductFormErr(`El código ${skuNormalized} ya está asignado al producto "${duplicated.nombre}"`);
+        return;
+      }
     }
 
     setBusy(true);
     setErr(null);
+    setProductFormErr(null);
     try {
+      const payload: ProductoCreateUpdate = {
+        ...productForm,
+        sku: skuNormalized || null,
+      };
+
       if (editingProduct) {
-        await updateProducto(editingProduct.id, productForm);
+        await updateProducto(editingProduct.id, payload);
       } else {
-        await createProducto(productForm);
+        await createProducto(payload);
       }
       await loadData();
       closeProductForm();
     } catch (e: any) {
-      setErr(e?.message ?? "Error guardando producto");
+      setProductFormErr(e?.message ?? "Error guardando producto");
     } finally {
       setBusy(false);
     }
@@ -351,6 +424,28 @@ export default function Products() {
     }
   }
 
+  // Funciones para modal de historial de precios
+  async function openPriceHistoryModal(product: Producto) {
+    setSelectedProductForPriceHistory(product);
+    setShowPriceHistoryModal(true);
+    setPriceHistory([]);
+    setLoadingPriceHistory(true);
+    try {
+      const data = await getPrecioHistorico(product.id);
+      setPriceHistory(data);
+    } catch (e: any) {
+      setErr(e?.message ?? "Error cargando historial de precios");
+    } finally {
+      setLoadingPriceHistory(false);
+    }
+  }
+
+  function closePriceHistoryModal() {
+    setShowPriceHistoryModal(false);
+    setSelectedProductForPriceHistory(null);
+    setPriceHistory([]);
+  }
+
   const getTipoIcon = (tipo: string) => {
     switch (tipo) {
       case "ambiente":
@@ -441,7 +536,61 @@ export default function Products() {
             size="lg"
           >
             <div className="space-y-4">
+              {productFormErr && <Alert variant="error">{productFormErr}</Alert>}
+
+              <div className="rounded-xl border border-primary-200 bg-primary-50 p-3">
+                <label className="block text-sm font-medium text-primary-900 mb-2">
+                  Escanear código de barras
+                </label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    ref={barcodeScanRef}
+                    type="text"
+                    value={barcodeScanInput}
+                    onChange={(e) => setBarcodeScanInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleScanSubmit();
+                      }
+                    }}
+                    placeholder="Escaneá y presioná Enter"
+                    className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-primary-300 hover:border-primary-400"
+                  />
+                  <Button type="button" variant="primary" onClick={handleScanSubmit}>
+                    Cargar código
+                  </Button>
+                </div>
+                {barcodeScanInfo && (
+                  <div className="mt-2 text-xs text-emerald-700">{barcodeScanInfo}</div>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    Tipo de producto <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={productForm.es_fabricable ? "fabricable" : "normal"}
+                    onChange={(e) =>
+                      setProductForm({
+                        ...productForm,
+                        es_fabricable: e.target.value === "fabricable",
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                  >
+                    <option value="normal">Producto normal</option>
+                    <option value="fabricable">Producto fabricable (a partir de insumos)</option>
+                  </select>
+                  {productForm.es_fabricable && (
+                    <div className="mt-2 text-xs text-amber-700">
+                      Luego podés configurar la receta en el módulo de Fabricación.
+                    </div>
+                  )}
+                </div>
+
                 <Input
                   label="Nombre"
                   required
@@ -485,7 +634,7 @@ export default function Products() {
                   label="SKU / Código de barras"
                   value={productForm.sku || ""}
                   onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })}
-                  placeholder="Opcional"
+                  placeholder="Ingresalo manualmente o con lector"
                 />
 
                 <Input
@@ -495,6 +644,14 @@ export default function Products() {
                   onChange={(e) => setProductForm({ ...productForm, dias_caducidad: e.target.value ? parseInt(e.target.value) : null })}
                   placeholder="Ej: 90 días = 3 meses"
                   helperText="Días desde la compra hasta el vencimiento (opcional)"
+                />
+
+                <Input
+                  label="Unidad de medida"
+                  value={productForm.unidad_medida || ""}
+                  onChange={(e) => setProductForm({ ...productForm, unidad_medida: e.target.value })}
+                  placeholder="Ej: kg, g, l, ml, unidad"
+                  helperText="Opcional. Solo para productos que se miden por peso o volumen"
                 />
 
                 <Input
@@ -612,6 +769,7 @@ export default function Products() {
                       <TableRow>
                         <TableHead>Nombre</TableHead>
                         <TableHead>Categoría</TableHead>
+                        <TableHead className="text-center">Clase</TableHead>
                         <TableHead className="text-center">Tipo</TableHead>
                         <TableHead className="text-right">Precio Venta</TableHead>
                         <TableHead className="text-right">Costo</TableHead>
@@ -629,6 +787,11 @@ export default function Products() {
                           </TableCell>
                           <TableCell>
                             <Badge variant="default">{prod.categoria_nombre}</Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant={prod.es_fabricable ? "pending" : "approved"}>
+                              {prod.es_fabricable ? "Fabricable" : "Normal"}
+                            </Badge>
                           </TableCell>
                           <TableCell className="text-center">
                             <Badge variant={getTipoBadgeVariant(prod.tipo_conservacion)}>
@@ -655,6 +818,16 @@ export default function Products() {
                                 disabled={busy}
                               >
                                 <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openPriceHistoryModal(prod)}
+                                disabled={busy}
+                                className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                title="Historial de precios"
+                              >
+                                <DollarSign className="h-4 w-4" />
                               </Button>
                               {isAdmin && (
                                 <Button
@@ -925,10 +1098,11 @@ export default function Products() {
                               type="number"
                               value={currentQuantity}
                               onChange={(e) =>
-                                handleStockQuantityChange(subUbic.id, parseInt(e.target.value) || 0)
+                                handleStockQuantityChange(subUbic.id, parseFloat(e.target.value) || 0)
                               }
                               className="w-20 text-center"
                               min="0"
+                              step="0.001"
                               disabled={busy}
                             />
                             <Button
@@ -967,6 +1141,53 @@ export default function Products() {
             disabled={!selectedSucursalForStock || Object.keys(stockUpdates).length === 0}
           >
             Guardar Stock
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Modal de Historial de Precios */}
+      <Modal
+        open={showPriceHistoryModal}
+        onClose={closePriceHistoryModal}
+        title={`Historial de precios - ${selectedProductForPriceHistory?.nombre || ""}`}
+        description="Últimas compras registradas (pedidos recibidos)"
+        size="lg"
+      >
+        <div className="space-y-4">
+          {loadingPriceHistory ? (
+            <div className="text-center py-8 text-neutral-500">Cargando...</div>
+          ) : priceHistory.length === 0 ? (
+            <div className="text-center py-8 text-neutral-500">No hay compras registradas para este producto.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Sucursal</TableHead>
+                    <TableHead className="text-right">Cantidad</TableHead>
+                    <TableHead className="text-right">Precio unit.</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {priceHistory.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="text-sm">{new Date(item.fecha).toLocaleDateString("es-AR")}</TableCell>
+                      <TableCell className="text-sm">{item.sucursal}</TableCell>
+                      <TableCell className="text-right text-sm">{item.cantidad}</TableCell>
+                      <TableCell className="text-right text-sm font-medium">${parseFloat(item.precio_costo_momento).toFixed(2)}</TableCell>
+                      <TableCell className="text-right text-sm font-semibold text-emerald-600">${item.total.toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+        <ModalFooter>
+          <Button variant="ghost" onClick={closePriceHistoryModal}>
+            Cerrar
           </Button>
         </ModalFooter>
       </Modal>
