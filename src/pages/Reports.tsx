@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import {
   DollarSign, TrendingUp, TrendingDown, Filter, Package,
-  AlertTriangle, ShoppingCart, Truck, Factory, Clock,
+  AlertTriangle, Truck, Factory, Clock,
   MapPin, ChevronDown, ChevronUp
 } from "lucide-react";
 import { tokenStorage } from "../utils/storage";
@@ -371,7 +371,7 @@ export default function Reports() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey="fecha" tick={{ fontSize: 11 }} />
                         <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                        <Tooltip formatter={(value: number) => money(value)} />
+                        <Tooltip formatter={(value: any) => money(Number(value ?? 0))} />
                         <Area type="monotone" dataKey="Ventas" stroke="#1e40af" fill="url(#colorVentas)" strokeWidth={2} />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -406,7 +406,7 @@ export default function Reports() {
                             <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(value: number) => money(value)} />
+                        <Tooltip formatter={(value: any) => money(Number(value ?? 0))} />
                         <Legend />
                       </PieChart>
                     </ResponsiveContainer>
@@ -456,7 +456,7 @@ export default function Reports() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                         <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                        <Tooltip formatter={(value: number) => money(value)} />
+                        <Tooltip formatter={(value: any) => money(Number(value ?? 0))} />
                         <Legend />
                         <Bar dataKey="Valor Stock" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="Ventas" fill="#10b981" radius={[4, 4, 0, 0]} />
@@ -690,7 +690,7 @@ export default function Reports() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {data.stock_por_ubicacion.map((s, i) => (
+                        {data.stock_por_ubicacion.map((s) => (
                           <TableRow key={`${s.sucursal_id}-${s.sub_ubicacion_id}`}>
                             <TableCell className="font-medium text-sm">{s.sucursal}</TableCell>
                             <TableCell className="text-sm">{s.sub_ubicacion}</TableCell>
