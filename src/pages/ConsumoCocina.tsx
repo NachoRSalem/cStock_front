@@ -8,6 +8,7 @@ import { createConsumo, listConsumos, deleteConsumo, type ConsumoCocina, type Co
 import { listCategorias, type Categoria } from "../api/products";
 
 import { tokenStorage } from "../utils/storage";
+import { sanitizeNumberInput } from "../utils/formatters";
 import {
   Alert,
   Badge,
@@ -34,6 +35,7 @@ type LineaConsumo = {
   key: number;
   producto: number | null;
   nombre: string;
+  unidad?: string;
   cantidad: string;
   sub_ubicacion_origen: number | null;
 };
@@ -45,6 +47,8 @@ type LineaVianda = {
   cantidad: string;
 };
 
+import { formatCurrency } from "../utils/formatters";
+
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("es-AR", {
     day: "2-digit",
@@ -54,7 +58,7 @@ function fmtDate(iso: string) {
 }
 
 function money(n: number) {
-  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n);
+  return formatCurrency(n);
 }
 
 export default function ConsumoCocinaPage() {
@@ -540,9 +544,9 @@ export default function ConsumoCocinaPage() {
                     selectedName={ln.nombre}
                     onSelect={(p) => {
                       if (p) {
-                        updateLinea(ln.key, { producto: p.id, nombre: p.nombre, sub_ubicacion_origen: null });
+                        updateLinea(ln.key, { producto: p.id, nombre: p.nombre, unidad: p.unidad_medida || "unidad", sub_ubicacion_origen: null });
                       } else {
-                        updateLinea(ln.key, { producto: null, nombre: "", sub_ubicacion_origen: null });
+                        updateLinea(ln.key, { producto: null, nombre: "", unidad: "", sub_ubicacion_origen: null });
                       }
                     }}
                     placeholder="Buscar producto..."
@@ -550,13 +554,15 @@ export default function ConsumoCocinaPage() {
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-xs text-neutral-600 mb-1">Cantidad</label>
+                  <label className="block text-xs text-neutral-600 mb-1">
+                    Cantidad {ln.unidad ? <span className="font-semibold text-primary-600">({ln.unidad})</span> : ""}
+                  </label>
                   <input
                     type="number"
                     min="0.001"
                     step="0.001"
                     value={ln.cantidad}
-                    onChange={(e) => updateLinea(ln.key, { cantidad: e.target.value })}
+                    onChange={(e) => updateLinea(ln.key, { cantidad: sanitizeNumberInput(e.target.value) })}
                     className="w-full px-3 py-2 rounded-lg border border-neutral-300 text-sm"
                     placeholder="0.000"
                   />

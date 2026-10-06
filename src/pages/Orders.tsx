@@ -66,6 +66,8 @@ export default function Orders() {
   const [pedidoToReceive, setPedidoToReceive] = useState<Pedido | null>(null);
   const [subUbicaciones, setSubUbicaciones] = useState<SubUbicacion[]>([]);
   const [destinos, setDestinos] = useState<Record<number, number>>({});
+  const [cantidadesRecibidas, setCantidadesRecibidas] = useState<Record<number, number>>({});
+  const [notasRecepcion, setNotasRecepcion] = useState<string>("");
   const [receiveBusy, setReceiveBusy] = useState(false);
 
   // Estados para ConfirmDialogs
@@ -742,13 +744,17 @@ export default function Orders() {
       // Cargar pedido completo
       const pedidoCompleto = await getPedido(pedido.id);
       setPedidoToReceive(pedidoCompleto);
+      setNotasRecepcion(pedidoCompleto.notas_recepcion || "");
 
-      // Precargar destinos si ya vienen seteados
-      const preset: Record<number, number> = {};
+      // Precargar destinos y cantidades recibidas
+      const presetDestinos: Record<number, number> = {};
+      const presetCantidades: Record<number, number> = {};
       for (const it of pedidoCompleto.items ?? []) {
-        if (it.sub_ubicacion_destino != null) preset[it.id] = it.sub_ubicacion_destino;
+        if (it.sub_ubicacion_destino != null) presetDestinos[it.id] = it.sub_ubicacion_destino;
+        presetCantidades[it.id] = it.cantidad_recibida != null ? Number(it.cantidad_recibida) : it.cantidad;
       }
-      setDestinos(preset);
+      setDestinos(presetDestinos);
+      setCantidadesRecibidas(presetCantidades);
 
       setShowReceiveModal(true);
     } catch (e: any) {
@@ -763,9 +769,11 @@ export default function Orders() {
     setErr(null);
     try {
       const body = {
+        notas_recepcion: notasRecepcion || undefined,
         items: pedidoToReceive.items.map((it) => ({
           id: it.id,
           sub_ubicacion_destino: destinos[it.id] ?? it.sub_ubicacion_destino ?? 0,
+          cantidad_recibida: cantidadesRecibidas[it.id] ?? it.cantidad,
         })),
       };
 
@@ -780,6 +788,8 @@ export default function Orders() {
       setShowReceiveModal(false);
       setPedidoToReceive(null);
       setDestinos({});
+      setCantidadesRecibidas({});
+      setNotasRecepcion("");
       await loadData();
     } catch (e: any) {
       setErr(e?.message ?? "Error confirmando recepción");
@@ -1940,9 +1950,11 @@ export default function Orders() {
           setShowReceiveModal(false);
           setPedidoToReceive(null);
           setDestinos({});
+          setCantidadesRecibidas({});
+          setNotasRecepcion("");
         }}
-        title="Recibir pedido"
-        description="Asigná sub-ubicación destino a cada producto del pedido"
+        title="Checklist de Recepción de Pedido"
+        description="Verificá la cantidad realmente recibida, detectá faltantes y asigná la sub-ubicación destino."
         size="lg"
       >
         {pedidoToReceive && (
@@ -1955,7 +1967,7 @@ export default function Orders() {
                     Pedido #{pedidoToReceive.id}
                   </div>
                   <div className="text-sm text-neutral-600 flex items-center gap-2 mt-1">
-                    <MapPin className="h-3 w-3" />
+                    <MapPin className="h-3.5 w-3.5" />
                     {pedidoToReceive.destino_nombre}
                   </div>
                 </div>
@@ -1967,54 +1979,103 @@ export default function Orders() {
 
             {/* Items del pedido */}
             <div className="space-y-3">
-              {pedidoToReceive.items.map((item) => (
-                <div 
-                  key={item.id}
-                  className="border border-neutral-200 rounded-lg p-4 space-y-3 hover:border-primary-300 transition-colors"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="font-medium text-neutral-900">
-                        {item.producto_nombre}
+              {pedidoToReceive.items.map((item) => {
+                const cantRecibida = cantidadesRecibidas[item.id] ?? item.cantidad;
+                const falta = item.cantidad - cantRecibida;
+                const unidad = item.producto_unidad_medida || "unidad";
+
+                return (
+                  <div 
+                    key={item.id}
+                    className="border border-neutral-200 rounded-lg p-4 space-y-3 hover:border-primary-300 transition-colors bg-white"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-medium text-neutral-900 text-base">
+                          {item.producto_nombre}
+                        </div>
+                        <div className="text-sm text-neutral-500 mt-1">
+                          Pedido: <span className="font-semibold text-neutral-800">{item.cantidad} {unidad}s</span> · 
+                          Costo unit.: <span className="font-medium">${item.precio_costo_momento}</span>
+                        </div>
                       </div>
-                      <div className="text-sm text-neutral-500 mt-1">
-                        Cantidad: <span className="font-medium">{item.cantidad}</span> · 
-                        Costo: <span className="font-medium">${item.precio_costo_momento}</span>
+
+                      {falta > 0 ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                          ⚠️ Faltan {falta} {unidad}s
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                          ✓ Completo
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-neutral-100">
+                      <div>
+                        <label className="block text-xs font-medium text-neutral-700 mb-1">
+                          Cantidad Recibida ({unidad}s) <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max={item.cantidad}
+                          step="1"
+                          value={cantRecibida}
+                          onChange={(e) => {
+                            const val = Math.max(0, parseInt(e.target.value) || 0);
+                            setCantidadesRecibidas((prev) => ({ ...prev, [item.id]: val }));
+                          }}
+                          className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent font-medium"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-neutral-700 mb-1">
+                          Sub-ubicación destino <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={destinos[item.id] ?? item.sub_ubicacion_destino ?? ""}
+                          onChange={(e) =>
+                            setDestinos((prev) => ({ ...prev, [item.id]: Number(e.target.value) }))
+                          }
+                          className={clsx(
+                            'w-full px-3 py-2 rounded-lg border text-sm transition-all bg-white text-neutral-900',
+                            'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent',
+                            !destinos[item.id] && !item.sub_ubicacion_destino
+                              ? 'border-red-300 focus:ring-red-500'
+                              : 'border-neutral-300 hover:border-neutral-400'
+                          )}
+                        >
+                          <option value="">Seleccionar sub-ubicación...</option>
+                          {subUbicaciones.map((sub) => (
+                            <option key={sub.id} value={sub.id}>
+                              {sub.nombre} ({sub.tipo})
+                            </option>
+                          ))}
+                        </select>
+                        {!destinos[item.id] && !item.sub_ubicacion_destino && (
+                          <p className="mt-1 text-xs text-red-600">Requerido</p>
+                        )}
                       </div>
                     </div>
                   </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-2">
-                      Sub-ubicación destino <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={destinos[item.id] ?? item.sub_ubicacion_destino ?? ""}
-                      onChange={(e) =>
-                        setDestinos((prev) => ({ ...prev, [item.id]: Number(e.target.value) }))
-                      }
-                      className={clsx(
-                        'w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all',
-                        'bg-white text-neutral-900',
-                        'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent',
-                        !destinos[item.id] && !item.sub_ubicacion_destino
-                          ? 'border-red-300 focus:ring-red-500'
-                          : 'border-neutral-300 hover:border-neutral-400'
-                      )}
-                    >
-                      <option value="">Seleccionar sub-ubicación...</option>
-                      {subUbicaciones.map((sub) => (
-                        <option key={sub.id} value={sub.id}>
-                          {sub.nombre} ({sub.tipo})
-                        </option>
-                      ))}
-                    </select>
-                    {!destinos[item.id] && !item.sub_ubicacion_destino && (
-                      <p className="mt-1.5 text-xs text-red-600">Este campo es requerido</p>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
+            </div>
+
+            {/* Nota de recepción opcional */}
+            <div>
+              <label className="block text-xs font-medium text-neutral-700 mb-1">
+                Nota u observaciones de recepción (opcional)
+              </label>
+              <textarea
+                rows={2}
+                value={notasRecepcion}
+                onChange={(e) => setNotasRecepcion(e.target.value)}
+                placeholder="Ej: Llegó 1 paquete roto o faltaron 2 productos que enviará el distribuidor luego..."
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
             </div>
 
             {pedidoToReceive.items.some((it) => !destinos[it.id] && it.sub_ubicacion_destino == null) && (
@@ -2032,6 +2093,8 @@ export default function Orders() {
               setShowReceiveModal(false);
               setPedidoToReceive(null);
               setDestinos({});
+              setCantidadesRecibidas({});
+              setNotasRecepcion("");
             }}
             disabled={receiveBusy}
           >

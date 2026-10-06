@@ -82,6 +82,30 @@ export function ProductAutocomplete({
           if (value && p.id === value) return true;
           return !excludeIds.includes(p.id);
         });
+
+        // Normalización y filtrado flexible cliente
+        if (query.trim()) {
+          const normalizeText = (str: string) =>
+            str
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/[-_]/g, " ")
+              .replace(/\s+/g, " ")
+              .trim();
+
+          const normQuery = normalizeText(query);
+          const queryWords = normQuery.split(" ").filter(Boolean);
+
+          filtered = filtered.filter((p) => {
+            const normName = normalizeText(p.nombre);
+            const normSku = p.sku ? normalizeText(p.sku) : "";
+            const normCat = normalizeText(p.categoria_nombre);
+            const combined = `${normName} ${normSku} ${normCat}`;
+            return queryWords.every((word) => combined.includes(word));
+          });
+        }
+
         // Filtro cliente por nombre de categoría (sin necesidad de conocer el ID)
         if (categoriaName) {
           filtered = filtered.filter(

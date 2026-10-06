@@ -33,6 +33,7 @@ import {
   Layers,
   ArrowLeft,
   Warehouse,
+  Search,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -267,6 +268,7 @@ export default function StockPage() {
   const [err, setErr]                     = useState<string | null>(null);
   const [loading, setLoading]             = useState(true);
   const [filterTipo, setFilterTipo]       = useState<string>("all");
+  const [searchTerm, setSearchTerm]       = useState<string>("");
   const [soloConStock, setSoloConStock]   = useState(true);
   // Admin drill-down: null = index, object = detail for that location
   const [selectedUbicacion, setSelectedUbicacion] = useState<{ id: number; nombre: string; tipo: string } | null>(null);
@@ -297,10 +299,22 @@ export default function StockPage() {
     setSelectedUbicacion(null);
   }, [soloConStock, sucursalId, isAdmin]);
 
-  // Tipo filter applied always
-  const filtered = filterTipo === "all"
-    ? allStock
-    : allStock.filter((i) => i.producto_tipo_conservacion === filterTipo);
+  // Tipo y texto search filter
+  const filtered = allStock.filter((i) => {
+    if (filterTipo !== "all" && i.producto_tipo_conservacion !== filterTipo) return false;
+    if (searchTerm.trim()) {
+      const normalizeText = (str: string) =>
+        str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[-_]/g, " ").replace(/\s+/g, " ").trim();
+      const normSearch = normalizeText(searchTerm);
+      const searchWords = normSearch.split(" ").filter(Boolean);
+      const normName = normalizeText(i.producto_nombre);
+      const normSub = normalizeText(i.sub_ubicacion_nombre);
+      const normLote = i.lote ? normalizeText(i.lote) : "";
+      const combined = `${normName} ${normSub} ${normLote}`;
+      return searchWords.every((word) => combined.includes(word));
+    }
+    return true;
+  });
 
   // For the drill-down detail (admin selected a location  OR sucursal user)
   const detailItems = selectedUbicacion
@@ -326,11 +340,26 @@ export default function StockPage() {
       <CardHeader>
         <div className="flex items-center gap-2">
           <Filter className="h-5 w-5 text-primary-600" />
-          <CardTitle className="text-base">Filtros</CardTitle>
+          <CardTitle className="text-base">Filtros de Stock</CardTitle>
         </div>
       </CardHeader>
       <CardBody>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 xl:grid-cols-3">
+          <div className="min-w-0">
+            <label className="block text-sm font-medium text-neutral-700 mb-2">
+              Buscar producto / lote
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Nombre de producto o lote..."
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 border-neutral-300 hover:border-neutral-400"
+              />
+            </div>
+          </div>
           <div className="min-w-0">
             <label className="block text-sm font-medium text-neutral-700 mb-2">
               Tipo de conservación

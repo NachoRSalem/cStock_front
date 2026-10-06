@@ -205,8 +205,8 @@ export default function Products() {
   }
 
   async function handleSaveProduct() {
-    if (!productForm.nombre || !productForm.categoria) {
-      setProductFormErr("Completá todos los campos obligatorios");
+    if (!productForm.nombre || !productForm.categoria || !productForm.unidad_medida?.trim()) {
+      setProductFormErr("Completá todos los campos obligatorios (incluyendo la unidad de medida)");
       return;
     }
 
@@ -646,13 +646,41 @@ export default function Products() {
                   helperText="Días desde la compra hasta el vencimiento (opcional)"
                 />
 
-                <Input
-                  label="Unidad de medida"
-                  value={productForm.unidad_medida || ""}
-                  onChange={(e) => setProductForm({ ...productForm, unidad_medida: e.target.value })}
-                  placeholder="Ej: kg, g, l, ml, unidad"
-                  helperText="Opcional. Solo para productos que se miden por peso o volumen"
-                />
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    Unidad de medida <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={["unidad", "kg", "g", "l", "ml", "pack", "caja", "porción"].includes(productForm.unidad_medida ?? "") ? (productForm.unidad_medida ?? "unidad") : "otro"}
+                      onChange={(e) => {
+                        if (e.target.value !== "otro") {
+                          setProductForm({ ...productForm, unidad_medida: e.target.value });
+                        }
+                      }}
+                      className="w-1/2 px-3 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 border-neutral-300"
+                    >
+                      <option value="unidad">unidad</option>
+                      <option value="kg">kg (kilogramos)</option>
+                      <option value="g">g (gramos)</option>
+                      <option value="l">l (litros)</option>
+                      <option value="ml">ml (mililitros)</option>
+                      <option value="pack">pack</option>
+                      <option value="caja">caja</option>
+                      <option value="porción">porción</option>
+                      <option value="otro">Otro / Personalizado</option>
+                    </select>
+                    <input
+                      type="text"
+                      value={productForm.unidad_medida || ""}
+                      onChange={(e) => setProductForm({ ...productForm, unidad_medida: e.target.value })}
+                      placeholder="Ej: kg, g, unidad"
+                      required
+                      className="w-1/2 px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 border-neutral-300"
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-neutral-500">Dato obligatorio (ej: unidad, kg, g, l, ml)</p>
+                </div>
 
                 <Input
                   label="Precio de venta"

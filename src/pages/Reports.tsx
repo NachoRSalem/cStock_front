@@ -16,13 +16,10 @@ import {
   MapPin, ChevronDown, ChevronUp
 } from "lucide-react";
 import { tokenStorage } from "../utils/storage";
+import { formatCurrency, formatNumber } from "../utils/formatters";
 
 function money(n: number) {
-  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n);
-}
-
-function formatNumber(n: number) {
-  return new Intl.NumberFormat("es-AR").format(n);
+  return formatCurrency(n);
 }
 
 function formatDate(dateStr: string) {
@@ -145,7 +142,7 @@ export default function Reports() {
   }));
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -208,8 +205,8 @@ export default function Reports() {
                   type="number"
                   min="1"
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
-                  value={stockMinimo}
-                  onChange={(e) => setStockMinimo(Number(e.target.value))}
+                  value={stockMinimo === 0 ? "" : stockMinimo}
+                  onChange={(e) => setStockMinimo(e.target.value === "" ? 0 : Math.max(0, parseInt(e.target.value) || 0))}
                 />
               </div>
               <div className="flex items-end gap-2">
@@ -228,7 +225,7 @@ export default function Reports() {
       {data && (
         <>
           {/* KPIs principales */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="hover:shadow-soft-lg transition-shadow">
               <CardBody>
                 <div className="flex items-start justify-between">
@@ -291,7 +288,7 @@ export default function Reports() {
           </div>
 
           {/* KPIs secundarios */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Card>
               <CardBody className="py-3">
                 <div className="flex items-center gap-3">

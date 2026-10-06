@@ -7,7 +7,9 @@ export type PedidoItem = {
   id: number;
   producto: number;
   producto_nombre: string;
+  producto_unidad_medida?: string;
   cantidad: number;
+  cantidad_recibida?: number | string | null;
   precio_costo_momento: string;
   sub_ubicacion_destino: number | null;
   sub_ubicacion_origen: number | null;
@@ -29,6 +31,7 @@ export type Pedido = {
   origen_tipo: OrigenTipo;
   origen_sucursal: number | null;
   origen_sucursal_nombre: string | null;
+  notas_recepcion?: string | null;
 };
 
 export type PedidoItemCreate = { 
@@ -46,11 +49,13 @@ export type PedidoCreateBody = {
 
 export type PedidoRecibirItem = { 
   id: number; 
-  sub_ubicacion_destino: number 
+  sub_ubicacion_destino: number;
+  cantidad_recibida?: number | string;
 };
 
 export type PedidoRecibirBody = { 
-  items: PedidoRecibirItem[] 
+  items: PedidoRecibirItem[];
+  notas_recepcion?: string;
 };
 
 export type PedidoAprobarItem = {

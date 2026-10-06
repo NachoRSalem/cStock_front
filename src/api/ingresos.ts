@@ -20,12 +20,32 @@ export type IngresoCreateUpdate = {
   medio_pago?: string;
 };
 
+export type GastoOperativo = {
+  id: number;
+  monto: string;
+  fecha: string;
+  categoria: string;
+  descripcion: string;
+  registrado_por: number;
+  registrado_por_nombre: string;
+  creado_en: string;
+};
+
+export type GastoOperativoCreateUpdate = {
+  monto: string | number;
+  fecha: string;
+  categoria?: string;
+  descripcion?: string;
+};
+
 export type BalanceData = {
   total_egresos: number;
   total_ingresos_cuotas: number;
   total_ventas_kiosco: number;
   total_ingresos: number;
+  total_gastos_operativos: number;
   balance: number;
+  balance_neto: number;
 };
 
 export function listIngresos(params?: { fecha_desde?: string; fecha_hasta?: string }) {
@@ -46,6 +66,26 @@ export function updateIngreso(id: number, body: IngresoCreateUpdate) {
 
 export function deleteIngreso(id: number) {
   return apiFetch<void>(`/api/sales/ingresos/${id}/`, { method: "DELETE" });
+}
+
+export function listGastos(params?: { fecha_desde?: string; fecha_hasta?: string }) {
+  const query = new URLSearchParams();
+  if (params?.fecha_desde) query.set("fecha_desde", params.fecha_desde);
+  if (params?.fecha_hasta) query.set("fecha_hasta", params.fecha_hasta);
+  const qs = query.toString() ? `?${query.toString()}` : "";
+  return apiFetch<GastoOperativo[]>(`/api/sales/gastos/${qs}`);
+}
+
+export function createGasto(body: GastoOperativoCreateUpdate) {
+  return apiFetch<GastoOperativo>("/api/sales/gastos/", { method: "POST", body });
+}
+
+export function updateGasto(id: number, body: GastoOperativoCreateUpdate) {
+  return apiFetch<GastoOperativo>(`/api/sales/gastos/${id}/`, { method: "PUT", body });
+}
+
+export function deleteGasto(id: number) {
+  return apiFetch<void>(`/api/sales/gastos/${id}/`, { method: "DELETE" });
 }
 
 export function getBalance(params?: { fecha_desde?: string; fecha_hasta?: string }) {

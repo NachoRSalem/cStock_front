@@ -4,9 +4,14 @@ import {
   createIngreso,
   updateIngreso,
   deleteIngreso,
+  listGastos,
+  createGasto,
+  deleteGasto,
   getBalance,
   type Ingreso,
   type IngresoCreateUpdate,
+  type GastoOperativo,
+  type GastoOperativoCreateUpdate,
   type BalanceData,
 } from "../api/ingresos";
 import {
@@ -28,14 +33,12 @@ import {
   TableCell,
   ConfirmDialog,
 } from "../components/ui";
-import { Plus, Edit2, Trash2, DollarSign, TrendingUp, TrendingDown, Scale, Settings } from "lucide-react";
-
-function money(n: number) {
-  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n);
-}
+import { Plus, Edit2, Trash2, DollarSign, TrendingUp, TrendingDown, Scale, Settings, Receipt } from "lucide-react";
+import { formatCurrency, sanitizeNumberInput } from "../utils/formatters";
 
 export default function Ingresos() {
   const [ingresos, setIngresos] = useState<Ingreso[]>([]);
+  const [gastos, setGastos] = useState<GastoOperativo[]>([]);
   const [balance, setBalance] = useState<BalanceData | null>(null);
   const [fetching, setFetching] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -44,17 +47,29 @@ export default function Ingresos() {
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
 
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<Ingreso | null>(null);
-  const [form, setForm] = useState<IngresoCreateUpdate>({
+  const [activeTab, setActiveTab] = useState<"ingresos" | "gastos">("ingresos");
+
+  // Form Ingresos
+  const [showFormIngreso, setShowFormIngreso] = useState(false);
+  const [editingIngreso, setEditingIngreso] = useState<Ingreso | null>(null);
+  const [formIngreso, setFormIngreso] = useState<IngresoCreateUpdate>({
     monto: "",
     fecha: new Date().toISOString().split("T")[0],
     descripcion: "",
     medio_pago: "efectivo",
   });
 
+  // Form Gastos
+  const [showFormGasto, setShowFormGasto] = useState(false);
+  const [formGasto, setFormGasto] = useState<GastoOperativoCreateUpdate>({
+    monto: "",
+    fecha: new Date().toISOString().split("T")[0],
+    categoria: "General",
+    descripcion: "",
+  });
+
   const [showDelete, setShowDelete] = useState(false);
-  const [deleteData, setDeleteData] = useState<{ id: number; descripcion: string } | null>(null);
+  const [deleteData, setDeleteData] = useState<{ id: number; type: "ingreso" | "gasto"; descripcion: string } | null>(null);
 
   const [showSettings, setShowSettings] = useState(false);
   const [configCuotaRapida, setConfigCuotaRapida] = useState(() => {
@@ -78,11 +93,13 @@ export default function Ingresos() {
         fecha_desde: fechaDesde || undefined,
         fecha_hasta: fechaHasta || undefined,
       };
-      const [ingData, balData] = await Promise.all([
+      const [ingData, gasData, balData] = await Promise.all([
         listIngresos(params),
+        listGastos(params),
         getBalance(params),
       ]);
       setIngresos(ingData);
+      setGastos(gasData);
       setBalance(balData);
     } catch (e: any) {
       setErr(e?.message ?? "Error cargando datos");
@@ -91,38 +108,49 @@ export default function Ingresos() {
     }
   }
 
-  function openForm(ing?: Ingreso) {
+  function openFormIngreso(ing?: Ingreso) {
     setErr(null);
     if (ing) {
-      setEditing(ing);
-      setForm({
+      setEditingIngreso(ing);
+      setFormIngreso({
         monto: ing.monto,
         fecha: ing.fecha,
         descripcion: ing.descripcion,
         medio_pago: ing.medio_pago || "efectivo",
       });
     } else {
-      setEditing(null);
-      setForm({
+      setEditingIngreso(null);
+      setFormIngreso({
         monto: "",
         fecha: new Date().toISOString().split("T")[0],
         descripcion: "",
         medio_pago: "efectivo",
       });
     }
-    setShowForm(true);
+    setShowFormIngreso(true);
+  }
+
+  function openFormGasto() {
+    setErr(null);
+    setFormGasto({
+      monto: "",
+      fecha: new Date().toISOString().split("T")[0],
+      categoria: "General",
+      descripcion: "",
+    });
+    setShowFormGasto(true);
   }
 
   function openRapida() {
     setErr(null);
-    setEditing(null);
-    setForm({
+    setEditingIngreso(null);
+    setFormIngreso({
       monto: configCuotaRapida.monto || "",
       fecha: new Date().toISOString().split("T")[0],
       descripcion: configCuotaRapida.descripcion || "",
       medio_pago: "efectivo",
     });
-    setShowForm(true);
+    setShowFormIngreso(true);
   }
 
   function openSettings() {
@@ -137,26 +165,30 @@ export default function Ingresos() {
     setShowSettings(false);
   }
 
-  function closeForm() {
-    setShowForm(false);
-    setEditing(null);
+  function closeFormIngreso() {
+    setShowFormIngreso(false);
+    setEditingIngreso(null);
   }
 
-  async function handleSave() {
-    if (!form.monto || !form.fecha) {
+  function closeFormGasto() {
+    setShowFormGasto(false);
+  }
+
+  async function handleSaveIngreso() {
+    if (!formIngreso.monto || !formIngreso.fecha) {
       setErr("Completá monto y fecha");
       return;
     }
     setBusy(true);
     setErr(null);
     try {
-      if (editing) {
-        await updateIngreso(editing.id, form);
+      if (editingIngreso) {
+        await updateIngreso(editingIngreso.id, formIngreso);
       } else {
-        await createIngreso(form);
+        await createIngreso(formIngreso);
       }
       await loadData();
-      closeForm();
+      closeFormIngreso();
     } catch (e: any) {
       setErr(e?.message ?? "Error guardando ingreso");
     } finally {
@@ -164,8 +196,26 @@ export default function Ingresos() {
     }
   }
 
-  function handleDelete(id: number, descripcion: string) {
-    setDeleteData({ id, descripcion });
+  async function handleSaveGasto() {
+    if (!formGasto.monto || !formGasto.fecha) {
+      setErr("Completá monto y fecha del gasto");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      await createGasto(formGasto);
+      await loadData();
+      closeFormGasto();
+    } catch (e: any) {
+      setErr(e?.message ?? "Error guardando gasto operativo");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleDelete(id: number, type: "ingreso" | "gasto", descripcion: string) {
+    setDeleteData({ id, type, descripcion });
     setShowDelete(true);
   }
 
@@ -175,10 +225,14 @@ export default function Ingresos() {
     setErr(null);
     setShowDelete(false);
     try {
-      await deleteIngreso(deleteData.id);
+      if (deleteData.type === "ingreso") {
+        await deleteIngreso(deleteData.id);
+      } else {
+        await deleteGasto(deleteData.id);
+      }
       await loadData();
     } catch (e: any) {
-      setErr(e?.message ?? "Error eliminando ingreso");
+      setErr(e?.message ?? `Error eliminando ${deleteData.type}`);
     } finally {
       setBusy(false);
       setDeleteData(null);
@@ -186,10 +240,10 @@ export default function Ingresos() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-neutral-900">Ingresos y Balance</h1>
-        <p className="text-sm text-neutral-500 mt-1">Registro de cuotas de comedor y comparación contra gastos</p>
+        <h1 className="text-2xl font-bold text-neutral-900">Ingresos, Gastos y Balance</h1>
+        <p className="text-sm text-neutral-500 mt-1">Gestión global de cuotas, ventas, gastos operativos y balance económico</p>
       </div>
 
       {err && <Alert variant="error">{err}</Alert>}
@@ -200,13 +254,13 @@ export default function Ingresos() {
 
       {/* Balance Cards */}
       {balance && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <Card>
             <CardBody className="py-4">
               <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-xs font-medium text-neutral-500 uppercase">Gastos (mercadería)</p>
-                  <p className="text-xl font-bold text-red-600 mt-1">{money(balance.total_egresos)}</p>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-neutral-500 uppercase">Egresos (compras)</p>
+                  <p className="break-words text-xl font-bold text-red-600 mt-1">{formatCurrency(balance.total_egresos)}</p>
                 </div>
                 <div className="p-2 bg-red-50 rounded-lg">
                   <TrendingDown className="w-5 h-5 text-red-600" />
@@ -218,9 +272,23 @@ export default function Ingresos() {
           <Card>
             <CardBody className="py-4">
               <div className="flex items-start justify-between">
-                <div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-neutral-500 uppercase">Gastos oper.</p>
+                  <p className="break-words text-xl font-bold text-amber-600 mt-1">{formatCurrency(balance.total_gastos_operativos || 0)}</p>
+                </div>
+                <div className="p-2 bg-amber-50 rounded-lg">
+                  <Receipt className="w-5 h-5 text-amber-600" />
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardBody className="py-4">
+              <div className="flex items-start justify-between">
+                <div className="min-w-0">
                   <p className="text-xs font-medium text-neutral-500 uppercase">Cuotas comedor</p>
-                  <p className="text-xl font-bold text-blue-600 mt-1">{money(balance.total_ingresos_cuotas)}</p>
+                  <p className="break-words text-xl font-bold text-blue-600 mt-1">{formatCurrency(balance.total_ingresos_cuotas)}</p>
                 </div>
                 <div className="p-2 bg-blue-50 rounded-lg">
                   <DollarSign className="w-5 h-5 text-blue-600" />
@@ -232,9 +300,9 @@ export default function Ingresos() {
           <Card>
             <CardBody className="py-4">
               <div className="flex items-start justify-between">
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs font-medium text-neutral-500 uppercase">Ventas kiosco</p>
-                  <p className="text-xl font-bold text-emerald-600 mt-1">{money(balance.total_ventas_kiosco)}</p>
+                  <p className="break-words text-xl font-bold text-emerald-600 mt-1">{formatCurrency(balance.total_ventas_kiosco)}</p>
                 </div>
                 <div className="p-2 bg-emerald-50 rounded-lg">
                   <TrendingUp className="w-5 h-5 text-emerald-600" />
@@ -246,10 +314,10 @@ export default function Ingresos() {
           <Card>
             <CardBody className="py-4">
               <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-xs font-medium text-neutral-500 uppercase">Balance</p>
-                  <p className={`text-xl font-bold mt-1 ${balance.balance >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {money(balance.balance)}
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-neutral-500 uppercase">Balance Neto</p>
+                  <p className={`text-xl font-bold mt-1 ${(balance.balance_neto ?? balance.balance) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {formatCurrency(balance.balance_neto ?? balance.balance)}
                   </p>
                 </div>
                 <div className="p-2 bg-neutral-50 rounded-lg">
@@ -295,88 +363,173 @@ export default function Ingresos() {
         </CardBody>
       </Card>
 
-      {/* Botones */}
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={openSettings} title="Configurar cuota rápida">
-          <Settings className="h-4 w-4" />
-        </Button>
-        <Button onClick={openRapida} size="lg" variant="secondary">
-          <Plus className="h-5 w-5" />
-          Cargar cuota rápida
-        </Button>
-        <Button onClick={() => openForm()} size="lg">
-          <Plus className="h-5 w-5" />
-          Cargar ingreso
-        </Button>
+      {/* Navegación por pestañas */}
+      <div className="flex flex-col gap-3 border-b border-neutral-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap gap-2">
+          <button
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "ingresos" ? "bg-primary-600 text-white" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+            }`}
+            onClick={() => setActiveTab("ingresos")}
+          >
+            Ingresos ({ingresos.length})
+          </button>
+          <button
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "gastos" ? "bg-primary-600 text-white" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+            }`}
+            onClick={() => setActiveTab("gastos")}
+          >
+            Gastos Operativos Globales ({gastos.length})
+          </button>
+        </div>
+
+        {activeTab === "ingresos" ? (
+            <div className="flex flex-wrap items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={openSettings} title="Configurar cuota rápida">
+              <Settings className="h-4 w-4" />
+            </Button>
+            <Button onClick={openRapida} size="sm" variant="secondary">
+              <Plus className="h-4 w-4" />
+              Cuota rápida
+            </Button>
+            <Button onClick={() => openFormIngreso()} size="sm">
+              <Plus className="h-4 w-4" />
+              Nuevo ingreso
+            </Button>
+          </div>
+        ) : (
+          <Button onClick={openFormGasto} size="sm">
+            <Plus className="h-4 w-4" />
+            Nuevo gasto operativo
+          </Button>
+        )}
       </div>
 
-      {/* Tabla */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Ingresos registrados</CardTitle>
-          <CardDescription>{ingresos.length} registros</CardDescription>
-        </CardHeader>
-        <CardBody className="p-0">
-          {ingresos.length === 0 ? (
-            <div className="text-center py-12 text-neutral-500">No hay ingresos registrados</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Descripción</TableHead>
-                    <TableHead>Medio de Pago</TableHead>
-                    <TableHead className="text-right">Monto</TableHead>
-                    <TableHead className="text-center">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {ingresos.map((ing) => (
-                    <TableRow key={ing.id}>
-                      <TableCell className="text-sm">{ing.fecha}</TableCell>
-                      <TableCell className="text-sm">{ing.descripcion || "—"}</TableCell>
-                      <TableCell className="text-sm">
-                        {ing.medio_pago === "mercado_pago" ? "Mercado Pago" : ing.medio_pago === "cuenta_bancaria" ? "Cuenta Bancaria" : "Efectivo"}
-                      </TableCell>
-                      <TableCell className="text-right font-semibold text-emerald-600">
-                        {money(parseFloat(ing.monto))}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-center gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => openForm(ing)} disabled={busy}>
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(ing.id, ing.descripcion || `Ingreso ${ing.id}`)}
-                            disabled={busy}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+      {/* Tabla Ingresos */}
+      {activeTab === "ingresos" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Ingresos registrados</CardTitle>
+            <CardDescription>{ingresos.length} registros</CardDescription>
+          </CardHeader>
+          <CardBody className="p-0">
+            {ingresos.length === 0 ? (
+              <div className="text-center py-12 text-neutral-500">No hay ingresos registrados</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Descripción</TableHead>
+                      <TableHead>Medio de Pago</TableHead>
+                      <TableHead className="text-right">Monto</TableHead>
+                      <TableHead className="text-center">Acciones</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardBody>
-      </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {ingresos.map((ing) => (
+                      <TableRow key={ing.id}>
+                        <TableCell className="text-sm">{ing.fecha}</TableCell>
+                        <TableCell className="text-sm">{ing.descripcion || "—"}</TableCell>
+                        <TableCell className="text-sm">
+                          {ing.medio_pago === "mercado_pago" ? "Mercado Pago" : ing.medio_pago === "cuenta_bancaria" ? "Cuenta Bancaria" : "Efectivo"}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-emerald-600">
+                          {formatCurrency(ing.monto)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-center gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => openFormIngreso(ing)} disabled={busy}>
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(ing.id, "ingreso", ing.descripcion || `Ingreso ${ing.id}`)}
+                              disabled={busy}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      )}
 
-      {/* Modal formulario */}
-      <Modal open={showForm} onClose={closeForm} title={editing ? "Editar ingreso" : "Nuevo ingreso"} size="md">
+      {/* Tabla Gastos Operativos */}
+      {activeTab === "gastos" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Gastos Operativos Registrados</CardTitle>
+            <CardDescription>Gastos generales de administración, servicios, sueldos, mantenimiento</CardDescription>
+          </CardHeader>
+          <CardBody className="p-0">
+            {gastos.length === 0 ? (
+              <div className="text-center py-12 text-neutral-500">No hay gastos operativos registrados</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Categoría</TableHead>
+                      <TableHead>Descripción</TableHead>
+                      <TableHead>Registrado por</TableHead>
+                      <TableHead className="text-right">Monto</TableHead>
+                      <TableHead className="text-center">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {gastos.map((gas) => (
+                      <TableRow key={gas.id}>
+                        <TableCell className="text-sm">{gas.fecha}</TableCell>
+                        <TableCell className="text-sm font-medium">{gas.categoria || "General"}</TableCell>
+                        <TableCell className="text-sm">{gas.descripcion || "—"}</TableCell>
+                        <TableCell className="text-sm text-neutral-500">{gas.registrado_por_nombre || "Admin"}</TableCell>
+                        <TableCell className="text-right font-semibold text-amber-600">
+                          {formatCurrency(gas.monto)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(gas.id, "gasto", gas.descripcion || `Gasto ${gas.id}`)}
+                              disabled={busy}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      )}
+
+      {/* Modal formulario Ingreso */}
+      <Modal open={showFormIngreso} onClose={closeFormIngreso} title={editingIngreso ? "Editar ingreso" : "Nuevo ingreso"} size="md">
         <div className="space-y-4">
           <Input
             label="Monto"
-            type="number"
-            step="0.01"
+            type="text"
             required
-            value={form.monto}
-            onChange={(e) => setForm({ ...form, monto: e.target.value })}
+            value={formIngreso.monto}
+            onChange={(e) => setFormIngreso({ ...formIngreso, monto: sanitizeNumberInput(e.target.value) })}
             placeholder="0.00"
           />
           <div>
@@ -384,22 +537,22 @@ export default function Ingresos() {
             <input
               type="date"
               className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
-              value={form.fecha}
-              onChange={(e) => setForm({ ...form, fecha: e.target.value })}
+              value={formIngreso.fecha}
+              onChange={(e) => setFormIngreso({ ...formIngreso, fecha: e.target.value })}
             />
           </div>
           <Input
             label="Descripción"
-            value={form.descripcion || ""}
-            onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
+            value={formIngreso.descripcion || ""}
+            onChange={(e) => setFormIngreso({ ...formIngreso, descripcion: e.target.value })}
             placeholder="Ej: Cuota comedor abril"
           />
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-1">Medio de Pago</label>
             <select
               className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm bg-white"
-              value={form.medio_pago || "efectivo"}
-              onChange={(e) => setForm({ ...form, medio_pago: e.target.value })}
+              value={formIngreso.medio_pago || "efectivo"}
+              onChange={(e) => setFormIngreso({ ...formIngreso, medio_pago: e.target.value })}
             >
               <option value="efectivo">Efectivo</option>
               <option value="mercado_pago">Mercado Pago</option>
@@ -408,11 +561,63 @@ export default function Ingresos() {
           </div>
         </div>
         <ModalFooter>
-          <Button variant="ghost" onClick={closeForm} disabled={busy}>
+          <Button variant="ghost" onClick={closeFormIngreso} disabled={busy}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} loading={busy}>
-            {editing ? "Guardar cambios" : "Cargar ingreso"}
+          <Button onClick={handleSaveIngreso} loading={busy}>
+            {editingIngreso ? "Guardar cambios" : "Cargar ingreso"}
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Modal formulario Gasto Operativo */}
+      <Modal open={showFormGasto} onClose={closeFormGasto} title="Nuevo Gasto Operativo Global" size="md">
+        <div className="space-y-4">
+          <Input
+            label="Monto"
+            type="text"
+            required
+            value={formGasto.monto}
+            onChange={(e) => setFormGasto({ ...formGasto, monto: sanitizeNumberInput(e.target.value) })}
+            placeholder="0.00"
+          />
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">Fecha</label>
+            <input
+              type="date"
+              className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+              value={formGasto.fecha}
+              onChange={(e) => setFormGasto({ ...formGasto, fecha: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">Categoría</label>
+            <select
+              className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm bg-white"
+              value={formGasto.categoria || "General"}
+              onChange={(e) => setFormGasto({ ...formGasto, categoria: e.target.value })}
+            >
+              <option value="Servicios">Servicios (Luz, Agua, Gas, Internet)</option>
+              <option value="Alquiler">Alquiler</option>
+              <option value="Sueldos">Sueldos y Honorarios</option>
+              <option value="Mantenimiento">Mantenimiento y Reparaciones</option>
+              <option value="Impuestos">Impuestos y Tasas</option>
+              <option value="General">General / Otros</option>
+            </select>
+          </div>
+          <Input
+            label="Descripción / Detalle"
+            value={formGasto.descripcion || ""}
+            onChange={(e) => setFormGasto({ ...formGasto, descripcion: e.target.value })}
+            placeholder="Ej: Pago de servicio de luz mensual"
+          />
+        </div>
+        <ModalFooter>
+          <Button variant="ghost" onClick={closeFormGasto} disabled={busy}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSaveGasto} loading={busy}>
+            Registrar Gasto Operativo
           </Button>
         </ModalFooter>
       </Modal>
@@ -424,8 +629,8 @@ export default function Ingresos() {
           setDeleteData(null);
         }}
         onConfirm={confirmDelete}
-        title="Eliminar ingreso"
-        message={`¿Eliminar el ingreso "${deleteData?.descripcion}"?`}
+        title={`Eliminar ${deleteData?.type === "ingreso" ? "ingreso" : "gasto operativo"}`}
+        message={`¿Eliminar ${deleteData?.type === "ingreso" ? "el ingreso" : "el gasto"} "${deleteData?.descripcion}"?`}
         confirmText="Eliminar"
         variant="danger"
         loading={busy}
@@ -436,10 +641,9 @@ export default function Ingresos() {
         <div className="space-y-4">
           <Input
             label="Monto predeterminado"
-            type="number"
-            step="0.01"
+            type="text"
             value={settingsForm.monto}
-            onChange={(e) => setSettingsForm({ ...settingsForm, monto: e.target.value })}
+            onChange={(e) => setSettingsForm({ ...settingsForm, monto: sanitizeNumberInput(e.target.value) })}
             placeholder="0.00"
           />
           <Input

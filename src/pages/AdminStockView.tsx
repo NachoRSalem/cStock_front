@@ -32,6 +32,7 @@ import {
   ArrowLeft,
   Warehouse,
   MapPin,
+  Search,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -243,6 +244,7 @@ export default function AdminStockView() {
   const [loading, setLoading]           = useState(true);
   const [soloConStock, setSoloConStock] = useState(true);
   const [filterTipo, setFilterTipo]     = useState<string>("all");
+  const [searchTerm, setSearchTerm]     = useState<string>("");
   const [selected, setSelected]         = useState<SelectedUbicacion | null>(null);
 
   useEffect(() => {
@@ -268,10 +270,23 @@ export default function AdminStockView() {
 
   if (loading) return <PageLoader message="Cargando stock global..." />;
 
-  // Apply tipo filter globally
-  const filtered = filterTipo === "all"
-    ? allStock
-    : allStock.filter((i) => i.producto_tipo_conservacion === filterTipo);
+  // Apply tipo and search filters globally
+  const filtered = allStock.filter((i) => {
+    if (filterTipo !== "all" && i.producto_tipo_conservacion !== filterTipo) return false;
+    if (searchTerm.trim()) {
+      const normalizeText = (str: string) =>
+        str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[-_]/g, " ").replace(/\s+/g, " ").trim();
+      const normSearch = normalizeText(searchTerm);
+      const searchWords = normSearch.split(" ").filter(Boolean);
+      const normName = normalizeText(i.producto_nombre);
+      const normSub = normalizeText(i.sub_ubicacion_nombre);
+      const normUbic = normalizeText(i.ubicacion_nombre);
+      const normLote = i.lote ? normalizeText(i.lote) : "";
+      const combined = `${normName} ${normSub} ${normUbic} ${normLote}`;
+      return searchWords.every((word) => combined.includes(word));
+    }
+    return true;
+  });
 
   // ── FILTER BAR (shared) ────────────────────────────────────────────────────
   const filterBar = (
@@ -279,11 +294,26 @@ export default function AdminStockView() {
       <CardHeader>
         <div className="flex items-center gap-2">
           <Filter className="h-5 w-5 text-primary-600" />
-          <CardTitle className="text-base">Filtros</CardTitle>
+          <CardTitle className="text-base">Filtros de Stock</CardTitle>
         </div>
       </CardHeader>
       <CardBody>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 xl:items-end">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 xl:grid-cols-3 xl:items-end">
+          <div className="min-w-0">
+            <label className="block text-sm font-medium text-neutral-700 mb-2">
+              Buscar en Stock
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Nombre de producto, lote o ubicación..."
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 border-neutral-300 hover:border-neutral-400"
+              />
+            </div>
+          </div>
           <div className="min-w-0">
             <label className="block text-sm font-medium text-neutral-700 mb-2">
               Tipo de conservación

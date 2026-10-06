@@ -1,28 +1,28 @@
-import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { PageTransition } from "./PageTransition";
-import { tokenStorage } from "../utils/storage";
-import { useState, useMemo, useEffect } from "react";
-import { listPedidos } from "../api/orders";
-import { switchAccount } from "../api/auth";
 import clsx from "clsx";
 import {
-  Home,
-  MapPin,
-  Package,
-  FileText,
-  ShoppingCart,
   BarChart3,
-  Users,
-  Warehouse,
-  ClipboardCheck,
-  LogOut,
-  Menu,
-  X,
   ChevronLeft,
-  Repeat,
-  Wallet,
+  ClipboardCheck,
   CookingPot,
+  FileText,
+  Home,
+  LogOut,
+  MapPin,
+  Menu,
+  Package,
+  Repeat,
+  ShoppingCart,
+  Users,
+  Wallet,
+  Warehouse,
+  X,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { switchAccount } from "../api/auth";
+import { listPedidos } from "../api/orders";
+import { tokenStorage } from "../utils/storage";
+import { PageTransition } from "./PageTransition";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
 
 type NavItem = {
@@ -50,7 +50,8 @@ function NavLink({
   badge?: number;
 }) {
   const loc = useLocation();
-  const active = loc.pathname === to || (to !== "/" && loc.pathname.startsWith(to));
+  const active =
+    loc.pathname === to || (to !== "/" && loc.pathname.startsWith(to));
 
   return (
     <Link
@@ -64,32 +65,39 @@ function NavLink({
           ? roleType === "admin"
             ? "bg-emerald-500 text-white shadow-sm"
             : roleType === "sucursal"
-            ? "bg-primary-500 text-white shadow-sm"
-            : "bg-neutral-100 text-neutral-900"
-          : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+              ? "bg-primary-500 text-white shadow-sm"
+              : "bg-neutral-100 text-neutral-900"
+          : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900",
       )}
     >
-      <span className={clsx("flex-shrink-0", active ? "text-white" : "text-neutral-500 group-hover:text-neutral-700")}>
+      <span
+        className={clsx(
+          "flex-shrink-0",
+          active
+            ? "text-white"
+            : "text-neutral-500 group-hover:text-neutral-700",
+        )}
+      >
         {icon}
       </span>
       {!collapsed && (
         <>
           <span className="flex-1 truncate">{label}</span>
           {badge !== undefined && badge > 0 && (
-            <span className={clsx(
-              "inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold",
-              active 
-                ? "bg-white text-neutral-900"
-                : "bg-red-500 text-white"
-            )}>
-              {badge > 99 ? '99+' : badge}
+            <span
+              className={clsx(
+                "inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold",
+                active ? "bg-white text-neutral-900" : "bg-red-500 text-white",
+              )}
+            >
+              {badge > 99 ? "99+" : badge}
             </span>
           )}
         </>
       )}
       {collapsed && badge !== undefined && badge > 0 && (
         <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-xs font-bold border-2 border-white">
-          {badge > 9 ? '9+' : badge}
+          {badge > 9 ? "9+" : badge}
         </span>
       )}
     </Link>
@@ -116,15 +124,17 @@ export function Layout() {
     async function loadPendientes() {
       try {
         const pedidos = await listPedidos();
-        
+
         if (role === "admin") {
           // Admin: contar pedidos pendientes (enviados a revisión)
-          const pendientes = pedidos.filter(p => p.estado === "pendiente").length;
+          const pendientes = pedidos.filter(
+            (p) => p.estado === "pendiente",
+          ).length;
           setPedidosPendientes(pendientes);
         } else if (role === "sucursal") {
           // Sucursal: contar pedidos aprobados destinados a esta sucursal
-          const aprobados = pedidos.filter(p => 
-            p.estado === "aprobado" && p.destino === session?.sucursal
+          const aprobados = pedidos.filter(
+            (p) => p.estado === "aprobado" && p.destino === session?.sucursal,
           ).length;
           setPedidosPendientes(aprobados);
         }
@@ -135,39 +145,110 @@ export function Layout() {
     }
 
     loadPendientes();
-    
+
     // Recargar cada 30 segundos
     const interval = setInterval(loadPendientes, 30000);
-    
+
     return () => clearInterval(interval);
   }, [role, session?.sucursal]);
 
   const navItems: NavItem[] = useMemo(
     () => [
-      { to: "/", label: "Inicio", icon: <Home className="h-5 w-5" />, roles: ["admin", "sucursal"] },
+      {
+        to: "/",
+        label: "Inicio",
+        icon: <Home className="h-5 w-5" />,
+        roles: ["admin", "sucursal"],
+      },
 
       // Admin
-      { to: "/admin/locations", label: "Sucursales", icon: <MapPin className="h-5 w-5" />, roles: ["admin"] },
-      { to: "/admin/stock", label: "Stock Global", icon: <Warehouse className="h-5 w-5" />, roles: ["admin"] },
-      { to: "/admin/products", label: "Productos", icon: <Package className="h-5 w-5" />, roles: ["admin"] },
-      { to: "/admin/consumo-cocina", label: "Consumo Cocina", icon: <CookingPot className="h-5 w-5" />, roles: ["admin"] },
-      { to: "/admin/orders", label: "Pedidos", icon: <FileText className="h-5 w-5" />, roles: ["admin"] },
-      { to: "/admin/sales", label: "Ventas", icon: <ShoppingCart className="h-5 w-5" />, roles: ["admin"] },
-      { to: "/admin/reports", label: "Reportes", icon: <BarChart3 className="h-5 w-5" />, roles: ["admin"] },
-      { to: "/admin/ingresos", label: "Ingresos", icon: <Wallet className="h-5 w-5" />, roles: ["admin"] },
-      { to: "/admin/users", label: "Usuarios", icon: <Users className="h-5 w-5" />, roles: ["admin"] },
+      {
+        to: "/admin/locations",
+        label: "Sucursales",
+        icon: <MapPin className="h-5 w-5" />,
+        roles: ["admin"],
+      },
+      {
+        to: "/admin/stock",
+        label: "Stock Global",
+        icon: <Warehouse className="h-5 w-5" />,
+        roles: ["admin"],
+      },
+      {
+        to: "/admin/products",
+        label: "Productos",
+        icon: <Package className="h-5 w-5" />,
+        roles: ["admin"],
+      },
+      {
+        to: "/admin/consumo-cocina",
+        label: "Consumo Cocina",
+        icon: <CookingPot className="h-5 w-5" />,
+        roles: ["admin"],
+      },
+      {
+        to: "/admin/orders",
+        label: "Pedidos",
+        icon: <FileText className="h-5 w-5" />,
+        roles: ["admin"],
+      },
+      {
+        to: "/admin/sales",
+        label: "Ventas",
+        icon: <ShoppingCart className="h-5 w-5" />,
+        roles: ["admin"],
+      },
+      {
+        to: "/admin/reports",
+        label: "Reportes",
+        icon: <BarChart3 className="h-5 w-5" />,
+        roles: ["admin"],
+      },
+      {
+        to: "/admin/ingresos",
+        label: "Ingresos",
+        icon: <Wallet className="h-5 w-5" />,
+        roles: ["admin"],
+      },
+      {
+        to: "/admin/users",
+        label: "Usuarios",
+        icon: <Users className="h-5 w-5" />,
+        roles: ["admin"],
+      },
 
       // Sucursal
-      { to: "/sucursal/stock", label: "Mi stock", icon: <Warehouse className="h-5 w-5" />, roles: ["sucursal"] },
-      { to: "/sucursal/orders", label: "Mis pedidos", icon: <ClipboardCheck className="h-5 w-5" />, roles: ["sucursal"] },
-      { to: "/sucursal/sales", label: "Registrar venta", icon: <ShoppingCart className="h-5 w-5" />, roles: ["sucursal"] },
-      { to: "/sucursal/consumo-cocina", label: "Consumo Cocina", icon: <CookingPot className="h-5 w-5" />, roles: ["sucursal"] },
-      { to: "/sucursal/ventas", label: "Mis ventas", icon: <BarChart3 className="h-5 w-5" />, roles: ["sucursal"] },
+      {
+        to: "/sucursal/stock",
+        label: "Mi stock",
+        icon: <Warehouse className="h-5 w-5" />,
+        roles: ["sucursal"],
+      },
+      {
+        to: "/sucursal/orders",
+        label: "Mis pedidos",
+        icon: <ClipboardCheck className="h-5 w-5" />,
+        roles: ["sucursal"],
+      },
+      {
+        to: "/sucursal/sales",
+        label: "Registrar venta",
+        icon: <ShoppingCart className="h-5 w-5" />,
+        roles: ["sucursal"],
+      },
+      {
+        to: "/sucursal/consumo-cocina",
+        label: "Consumo Cocina",
+        icon: <CookingPot className="h-5 w-5" />,
+        roles: ["sucursal"],
+      },
     ],
-    []
+    [],
   );
 
-  const visibleItems = navItems.filter((it) => !it.roles || (role ? it.roles.includes(role) : true));
+  const visibleItems = navItems.filter(
+    (it) => !it.roles || (role ? it.roles.includes(role) : true),
+  );
 
   function logout() {
     tokenStorage.clear();
@@ -215,7 +296,9 @@ export function Layout() {
           </div>
           {!sidebarCollapsed && (
             <div>
-              <h1 className="text-lg font-bold text-neutral-900">Gestión Stock</h1>
+              <h1 className="text-lg font-bold text-neutral-900">
+                Gestión Stock
+              </h1>
               <p className="text-xs text-neutral-500">Sistema de logística</p>
             </div>
           )}
@@ -224,7 +307,12 @@ export function Layout() {
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
           className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg hover:bg-neutral-100 transition-colors"
         >
-          <ChevronLeft className={clsx("h-5 w-5 text-neutral-500 transition-transform", sidebarCollapsed && "rotate-180")} />
+          <ChevronLeft
+            className={clsx(
+              "h-5 w-5 text-neutral-500 transition-transform",
+              sidebarCollapsed && "rotate-180",
+            )}
+          />
         </button>
         <button
           onClick={() => setSidebarOpen(false)}
@@ -246,7 +334,14 @@ export function Layout() {
             {role && (
               <div className="flex items-center gap-2">
                 <span className="text-neutral-500">Rol:</span>
-                <span className={clsx("px-2 py-0.5 rounded-md text-xs font-medium", role === "admin" ? "bg-emerald-100 text-emerald-700" : "bg-primary-100 text-primary-700")}>
+                <span
+                  className={clsx(
+                    "px-2 py-0.5 rounded-md text-xs font-medium",
+                    role === "admin"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-primary-100 text-primary-700",
+                  )}
+                >
                   {role === "admin" ? "Administrador" : "Sucursal"}
                 </span>
               </div>
@@ -267,12 +362,16 @@ export function Layout() {
 
           if (it.roles?.includes("admin") && !it.roles?.includes("sucursal")) {
             type = "admin";
-          } else if (it.roles?.includes("sucursal") && !it.roles?.includes("admin")) {
+          } else if (
+            it.roles?.includes("sucursal") &&
+            !it.roles?.includes("admin")
+          ) {
             type = "sucursal";
           }
 
           // Agregar badge a los links de pedidos
-          const isPedidosLink = it.to === "/admin/orders" || it.to === "/sucursal/orders";
+          const isPedidosLink =
+            it.to === "/admin/orders" || it.to === "/sucursal/orders";
           const badge = isPedidosLink ? pedidosPendientes : undefined;
 
           return (
@@ -296,7 +395,7 @@ export function Layout() {
           title={sidebarCollapsed ? "Cerrar sesión" : undefined}
           className={clsx(
             "flex items-center gap-3 w-full px-3 py-2.5 rounded-xl font-medium text-sm text-red-600 hover:bg-red-50 transition-colors",
-            sidebarCollapsed && "justify-center"
+            sidebarCollapsed && "justify-center",
           )}
         >
           <LogOut className="h-5 w-5" />
@@ -320,7 +419,7 @@ export function Layout() {
       <aside
         className={clsx(
           "hidden lg:flex flex-col bg-white border-r border-neutral-200 transition-all duration-300 z-30",
-          sidebarCollapsed ? "w-20" : "w-72"
+          sidebarCollapsed ? "w-20" : "w-72",
         )}
       >
         {sidebarContent}
@@ -330,14 +429,14 @@ export function Layout() {
       <aside
         className={clsx(
           "fixed inset-y-0 left-0 flex w-[88vw] max-w-[20rem] lg:hidden flex-col bg-white border-r border-neutral-200 z-50 transition-transform duration-300",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          sidebarOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         {sidebarContent}
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
         {/* Top Bar */}
         <header className="flex h-16 items-center justify-between border-b border-neutral-200 bg-white px-3 sm:px-4 lg:px-6">
           <button
@@ -368,14 +467,16 @@ export function Layout() {
             )}
             <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-neutral-100">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-medium text-neutral-700">En línea</span>
+              <span className="text-xs font-medium text-neutral-700">
+                En línea
+              </span>
             </div>
           </div>
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto custom-scrollbar">
-          <div className="mx-auto max-w-[1600px] p-3 sm:p-4 lg:p-6">
+        <main className="min-w-0 flex-1 overflow-y-auto custom-scrollbar">
+          <div className="mx-auto min-w-0 max-w-[1600px] p-3 sm:p-4 lg:p-6">
             <PageTransition key={location.pathname}>
               <Outlet />
             </PageTransition>

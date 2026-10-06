@@ -167,7 +167,7 @@ export default function Users() {
                 <div className="text-right">
                   <div className="text-xs text-neutral-500 mb-1">Contraseña</div>
                   <div className={clsx(
-                    "font-mono px-3 py-1.5 rounded-lg",
+                    "font-mono px-3 py-1.5 rounded-lg break-all max-w-[220px]",
                     showPasswords 
                       ? "bg-white border border-emerald-300 text-neutral-900" 
                       : "bg-neutral-200 text-neutral-400"
@@ -224,7 +224,7 @@ export default function Users() {
                       <div className="text-right">
                         <div className="text-xs text-neutral-500 mb-1">Contraseña</div>
                         <div className={clsx(
-                          "font-mono px-3 py-1.5 rounded-lg",
+                          "font-mono px-3 py-1.5 rounded-lg break-all max-w-[220px]",
                           showPasswords 
                             ? "bg-primary-50 border border-primary-300 text-neutral-900" 
                             : "bg-neutral-200 text-neutral-400"
