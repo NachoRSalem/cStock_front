@@ -6,6 +6,7 @@ import {
   BarChart3,
   Users,
   Package,
+  UtensilsCrossed,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -26,6 +27,14 @@ export default function AdminDashboard() {
       link: "/admin/products",
       iconBg: "bg-emerald-50",
       iconColor: "text-emerald-600",
+    },
+    {
+      icon: <UtensilsCrossed className="h-5 w-5" />,
+      title: "Viandas",
+      description: "Ver las viandas creadas y editar su precio de venta",
+      link: "/admin/viandas",
+      iconBg: "bg-rose-50",
+      iconColor: "text-rose-600",
     },
     {
       icon: <FileText className="h-5 w-5" />,
@@ -76,7 +85,7 @@ export default function AdminDashboard() {
       {/* Features Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
         {features.map((feature) => (
-          <Link key={feature.link} to={feature.link}>
+          <Link key={feature.title} to={feature.link}>
             <Card hover className="h-full transition-all hover:border-primary-300">
               <CardBody>
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${feature.iconBg}`}>

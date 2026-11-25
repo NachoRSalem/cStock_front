@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { listVentas, type VentaDetalle } from "../api/sales";
+import { listVentas, anularVenta, type VentaDetalle } from "../api/sales";
+import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { listSucursales, type Sucursal } from "../api/locations";
 import {
   Card,
@@ -51,7 +52,8 @@ function fmtDate(iso: string) {
 
 // ─── expandable venta row ─────────────────────────────────────────────────────
 
-function VentaRow({ venta }: { venta: VentaDetalle }) {
+function VentaRow({ venta, onAnular }: { venta: VentaDetalle; onAnular: (v: VentaDetalle) => void }) {
+  const anulada = venta.estado === "anulada";
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -80,16 +82,32 @@ function VentaRow({ venta }: { venta: VentaDetalle }) {
         <TableCell className="text-center">
           <Badge variant="default">{venta.items.length} ítem{venta.items.length !== 1 ? "s" : ""}</Badge>
         </TableCell>
-        <TableCell className="text-right font-bold text-emerald-600 text-base">
+        <TableCell className={clsx("text-right font-bold text-base", anulada ? "text-neutral-400 line-through" : "text-emerald-600")}>
           {fmtMoney(venta.total)}
+        </TableCell>
+        <TableCell className="text-right">
+          {anulada ? (
+            <Badge variant="danger">Anulada</Badge>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAnular(venta);
+              }}
+            >
+              Anular
+            </Button>
+          )}
         </TableCell>
       </TableRow>
 
       {open && (
         <TableRow>
-          <td colSpan={5} className="bg-neutral-50 p-0">
-            <div className="px-8 py-3">
-              <table className="w-full text-sm">
+          <td colSpan={6} className="bg-neutral-50 p-0">
+            <div className="px-3 py-3 sm:px-8">
+              <table className="w-full text-xs sm:text-sm">
                 <thead>
                   <tr className="text-neutral-500 text-xs uppercase">
                     <th className="text-left pb-1 font-medium">Producto</th>
@@ -140,6 +158,26 @@ export default function AdminSalesView() {
   const [paginaActual, setPaginaActual] = useState(1);
   const [loadingDetalle, setLoadingDetalle] = useState(false);
 
+  const [ventaAAnular, setVentaAAnular] = useState<VentaDetalle | null>(null);
+  const [anulando, setAnulando] = useState(false);
+
+  async function confirmarAnulacion() {
+    if (!ventaAAnular) return;
+    setAnulando(true);
+    setErr(null);
+    try {
+      const actualizada = await anularVenta(ventaAAnular.id);
+      setVentasDetalle((prev) => prev.map((v) => (v.id === actualizada.id ? actualizada : v)));
+      setAllVentas((prev) => prev.map((v) => (v.id === actualizada.id ? actualizada : v)));
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Error anulando la venta");
+    } finally {
+      setVentaAAnular(null);
+      setAnulando(false);
+    }
+  }
+
+
   useEffect(() => {
     async function load() {
       setErr(null);
@@ -181,7 +219,7 @@ export default function AdminSalesView() {
 
   // ── DETAIL VIEW ────────────────────────────────────────────────────────────
   if (selected) {
-    const totalRev = ventasDetalle.reduce((s, v) => s + parseFloat(v.total), 0);
+    const totalRev = ventasDetalle.filter((v) => v.estado !== "anulada").reduce((s, v) => s + parseFloat(v.total), 0);
     const totalPaginas = Math.ceil(paginacion.count / 10);
 
     return (
@@ -255,11 +293,12 @@ export default function AdminSalesView() {
                     <TableHead>Vendedor</TableHead>
                     <TableHead className="text-center">Ítems</TableHead>
                     <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="w-28" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {ventasDetalle.map((v) => (
-                    <VentaRow key={v.id} venta={v} />
+                    <VentaRow key={v.id} venta={v} onAnular={setVentaAAnular} />
                   ))}
                 </TableBody>
               </Table>
@@ -302,7 +341,7 @@ export default function AdminSalesView() {
                           key={pageNum}
                           onClick={() => setPaginaActual(pageNum)}
                           className={clsx(
-                            "w-8 h-8 rounded-lg text-sm font-medium transition-colors",
+                            "w-10 h-10 sm:w-8 sm:h-8 rounded-lg text-sm font-medium transition-colors",
                             paginaActual === pageNum
                               ? "bg-emerald-500 text-white"
                               : "text-neutral-600 hover:bg-neutral-100"
@@ -329,12 +368,23 @@ export default function AdminSalesView() {
             )}
           </Card>
         )}
+      <ConfirmDialog
+        open={ventaAAnular !== null}
+        onClose={() => setVentaAAnular(null)}
+        onConfirm={confirmarAnulacion}
+        title="Anular venta"
+        message={`Vas a anular la venta #${ventaAAnular?.id ?? ""}. Se devuelve el stock de sus productos y se descuentan ${fmtMoney(ventaAAnular?.total ?? 0)} de los ingresos. Esta acción no se puede deshacer.`}
+        confirmText="Anular venta"
+        cancelText="Volver"
+        variant="danger"
+        loading={anulando}
+      />
       </div>
     );
   }
 
   // ── INDEX VIEW (sucursal cards) ────────────────────────────────────────────
-  const totalGlobal  = allVentas.reduce((s, v) => s + parseFloat(v.total), 0);
+  const totalGlobal  = allVentas.filter((v) => v.estado !== "anulada").reduce((s, v) => s + parseFloat(v.total), 0);
   const ventasPorSuc = sucursales.reduce<Record<number, VentaDetalle[]>>((acc, suc) => {
     acc[suc.id] = allVentas.filter((v) => v.sucursal === suc.id);
     return acc;
@@ -411,7 +461,7 @@ export default function AdminSalesView() {
           })
           .map((suc) => {
             const ventas    = ventasPorSuc[suc.id] ?? [];
-            const total     = ventas.reduce((s, v) => s + parseFloat(v.total), 0);
+            const total     = ventas.filter((v) => v.estado !== "anulada").reduce((s, v) => s + parseFloat(v.total), 0);
             const isAlmacen = suc.tipo === "almacen";
             const lastVenta = ventas[0];
 

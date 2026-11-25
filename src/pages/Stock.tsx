@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listStock, type Stock } from "../api/stock";
+import { StockGroupedTable, agruparPorProducto } from "../components/StockGroupedTable";
 import { listSucursales, type Sucursal } from "../api/locations";
 import { tokenStorage } from "../utils/storage";
 import {
@@ -10,21 +11,13 @@ import {
   Badge,
   PageLoader,
   Alert,
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
   Button,
 } from "../components/ui";
 import {
   Package,
-  MapPin,
   Thermometer,
   Refrigerator,
   Snowflake,
-  Calendar,
   TrendingUp,
   Filter,
   ChevronDown,
@@ -39,153 +32,12 @@ import clsx from "clsx";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function tipoIcon(tipo: string) {
-  switch (tipo) {
-    case "heladera": return <Refrigerator className="h-4 w-4" />;
-    case "freezer":  return <Snowflake    className="h-4 w-4" />;
-    default:         return <Thermometer  className="h-4 w-4" />;
-  }
-}
-
-function tipoBadgeVariant(tipo: string): "default" | "draft" | "pending" | "approved" {
-  if (tipo === "heladera") return "pending";
-  if (tipo === "freezer")  return "draft";
-  return "approved";
-}
-
-function stockColor(cantidad: number) {
-  if (cantidad <= 0)  return "text-red-600";
-  if (cantidad < 10)  return "text-orange-500";
-  if (cantidad < 20)  return "text-yellow-600";
-  return "text-emerald-600";
-}
-
-function vencimientoEstado(diasParaVencer: number | null) {
-  if (diasParaVencer === null) return null;
-  if (diasParaVencer <= 0) return "vencido";
-  if (diasParaVencer <= 7) return "critico";
-  if (diasParaVencer <= 30) return "proximo";
-  return "vigente";
-}
-
-function vencimientoBadgeVariant(estado: string | null): "default" | "draft" | "pending" | "approved" | "danger" {
-  if (estado === "vencido") return "danger";
-  if (estado === "critico") return "draft";
-  if (estado === "proximo") return "pending";
-  return "approved";
-}
-
-function vencimientoTexto(diasParaVencer: number | null, fechaVencimiento: string | null) {
-  if (diasParaVencer === null || !fechaVencimiento) return null;
-  
-  if (diasParaVencer <= 0) {
-    const diasVencido = Math.abs(diasParaVencer);
-    return `⚠️ Vencido hace ${diasVencido} día${diasVencido !== 1 ? 's' : ''}`;
-  }
-  
-  if (diasParaVencer <= 7) {
-    return `⏰ Vence en ${diasParaVencer} día${diasParaVencer !== 1 ? 's' : ''}`;
-  }
-  
-  if (diasParaVencer <= 30) {
-    return `⏳ ${diasParaVencer} días`;
-  }
-  
-  // Mostrar fecha completa si hay más de 30 días
-  const fecha = new Date(fechaVencimiento);
-  return `✓ ${fecha.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
-}
-
 function groupBy<T>(arr: T[], key: (item: T) => string): Record<string, T[]> {
   return arr.reduce((acc, item) => {
     const k = key(item);
     (acc[k] = acc[k] || []).push(item);
     return acc;
   }, {} as Record<string, T[]>);
-}
-
-// ─── shared mini-table ────────────────────────────────────────────────────────
-
-function StockTable({ rows }: { rows: Stock[] }) {
-  return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Producto</TableHead>
-            <TableHead>Sub-ubicación</TableHead>
-            <TableHead className="text-center">Tipo</TableHead>
-            <TableHead className="text-right">Cantidad</TableHead>
-            <TableHead>Vencimiento</TableHead>
-            <TableHead>Última act.</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((item) => (
-            <TableRow key={item.id}>
-              <TableCell>
-                <div>
-                  <span className="font-medium text-neutral-900">{item.producto_nombre}</span>
-                  {item.lote && (
-                    <div className="text-xs text-neutral-500 mt-0.5">Lote: {item.lote}</div>
-                  )}
-                </div>
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-1.5 text-sm text-neutral-500">
-                  <MapPin className="h-3 w-3" />
-                  {item.sub_ubicacion_nombre}
-                </div>
-              </TableCell>
-              <TableCell className="text-center">
-                <Badge variant={tipoBadgeVariant(item.producto_tipo_conservacion)}>
-                  <span className="flex items-center gap-1">
-                    {tipoIcon(item.producto_tipo_conservacion)}
-                    {item.producto_tipo_conservacion.charAt(0).toUpperCase() +
-                      item.producto_tipo_conservacion.slice(1)}
-                  </span>
-                </Badge>
-              </TableCell>
-              <TableCell className="text-right">
-                <span className={clsx("font-bold text-lg", stockColor(item.cantidad))}>
-                  {item.cantidad}
-                </span>
-              </TableCell>
-              <TableCell>
-                {item.fecha_vencimiento && item.dias_para_vencer !== null ? (
-                  <div className="flex items-center justify-start">
-                    <Badge 
-                      variant={vencimientoBadgeVariant(vencimientoEstado(item.dias_para_vencer))}
-                      className={clsx(
-                        "text-xs",
-                        vencimientoEstado(item.dias_para_vencer) === "vencido" && "bg-red-100 text-red-800 border-red-300"
-                      )}
-                    >
-                      {vencimientoTexto(item.dias_para_vencer, item.fecha_vencimiento)}
-                    </Badge>
-                  </div>
-                ) : (
-                  <span className="text-xs text-neutral-400">—</span>
-                )}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-1.5 text-xs text-neutral-400">
-                  <Calendar className="h-3 w-3" />
-                  {new Date(item.ultima_actualizacion).toLocaleDateString("es-AR", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
 }
 
 // ─── collapsible group panel ──────────────────────────────────────────────────
@@ -202,9 +54,10 @@ function GroupPanel({
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const totalUnidades = rows.reduce((s, r) => s + r.cantidad, 0);
-  const bajoStock     = rows.filter((r) => r.cantidad > 0 && r.cantidad < 10).length;
-  const sinStock      = rows.filter((r) => r.cantidad <= 0).length;
+  const grupos        = agruparPorProducto(rows);
+  const totalUnidades = Number(rows.reduce((s, r) => s + r.cantidad, 0).toFixed(3));
+  const bajoStock     = grupos.filter((g) => g.total > 0 && g.total < 10).length;
+  const sinStock      = grupos.filter((g) => g.total <= 0).length;
   const vencidos      = rows.filter((r) => r.dias_para_vencer !== null && r.dias_para_vencer <= 0).length;
   const porVencer     = rows.filter((r) => r.dias_para_vencer !== null && r.dias_para_vencer > 0 && r.dias_para_vencer <= 30).length;
 
@@ -224,7 +77,7 @@ function GroupPanel({
           <div>
             <div className="font-semibold text-neutral-900">{title}</div>
             <div className="flex items-center gap-3 text-xs text-neutral-500 mt-0.5">
-              <span>{rows.length} productos</span>
+              <span>{grupos.length} productos</span>
               <span>·</span>
               <span>{totalUnidades} unidades</span>
               {vencidos > 0 && (
@@ -254,7 +107,7 @@ function GroupPanel({
               Sin productos en esta sección
             </div>
           ) : (
-            <StockTable rows={rows} />
+            <StockGroupedTable rows={rows} />
           )}
         </CardBody>
       )}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { login } from "../api/auth";
 import { tokenStorage } from "../utils/storage";
 import { Button, Input, Alert } from "../components/ui";
@@ -12,16 +12,21 @@ export default function Login() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Si ya hay una sesión válida no tiene sentido volver a pedir credenciales.
+  if (tokenStorage.getAccess()) return <Navigate to="/" replace />;
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return; // evita el doble envío
     setErr(null);
     setLoading(true);
     try {
-      const session = await login(username, password);
+      // El usuario puede traer espacios o mayúscula inicial del teclado del celular.
+      const session = await login(username.trim(), password);
       tokenStorage.setSession(session);
       nav("/");
-    } catch (e: any) {
-      setErr(e?.message ?? "Error de login");
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Error de login");
     } finally {
       setLoading(false);
     }
@@ -54,12 +59,17 @@ export default function Login() {
               onChange={(e) => setUsername(e.target.value)}
               required
               autoFocus
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
             />
 
             <Input
               label="Contraseña"
               placeholder="Ingresá tu contraseña"
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required

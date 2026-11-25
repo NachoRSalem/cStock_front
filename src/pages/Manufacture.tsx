@@ -352,6 +352,7 @@ export default function Manufacture() {
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-2">Producto fabricable</label>
               <ProductAutocomplete
+                excludeViandas
                 value={recetaSeleccionada?.producto_final ?? null}
                 selectedName={recetaSeleccionada?.producto_final_nombre ?? ""}
                 onSelect={(product) => {
@@ -495,6 +496,7 @@ export default function Manufacture() {
                   <label className="block text-xs text-neutral-600 mb-1">Insumo</label>
                   <div>
                     <ProductAutocomplete
+                excludeViandas
                       value={item.producto_insumo || null}
                       selectedName={
                         item.producto_insumo

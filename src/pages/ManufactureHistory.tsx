@@ -301,7 +301,7 @@ export default function ManufactureHistory({ embedded = false }: ManufactureHist
                             key={pageNum}
                             onClick={() => setPaginaActual(pageNum)}
                             className={clsx(
-                              "w-8 h-8 rounded-lg text-sm font-medium",
+                              "w-10 h-10 sm:w-8 sm:h-8 rounded-lg text-sm font-medium",
                               paginaActual === pageNum ? "bg-primary-500 text-white" : "text-neutral-600 hover:bg-neutral-100"
                             )}
                           >

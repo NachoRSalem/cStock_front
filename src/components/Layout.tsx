@@ -13,6 +13,7 @@ import {
   Repeat,
   ShoppingCart,
   Users,
+  UtensilsCrossed,
   Wallet,
   Warehouse,
   X,
@@ -178,6 +179,12 @@ export function Layout() {
         to: "/admin/products",
         label: "Productos",
         icon: <Package className="h-5 w-5" />,
+        roles: ["admin"],
+      },
+      {
+        to: "/admin/viandas",
+        label: "Viandas",
+        icon: <UtensilsCrossed className="h-5 w-5" />,
         roles: ["admin"],
       },
       {

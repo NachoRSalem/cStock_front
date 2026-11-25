@@ -4,12 +4,14 @@ import {
   createIngreso,
   updateIngreso,
   deleteIngreso,
+  CONCEPTOS_GASTO,
   listGastos,
   createGasto,
   deleteGasto,
   getBalance,
   type Ingreso,
   type IngresoCreateUpdate,
+  type ConceptoGasto,
   type GastoOperativo,
   type GastoOperativoCreateUpdate,
   type BalanceData,
@@ -64,7 +66,7 @@ export default function Ingresos() {
   const [formGasto, setFormGasto] = useState<GastoOperativoCreateUpdate>({
     monto: "",
     fecha: new Date().toISOString().split("T")[0],
-    categoria: "General",
+    concepto: "otro",
     descripcion: "",
   });
 
@@ -135,7 +137,7 @@ export default function Ingresos() {
     setFormGasto({
       monto: "",
       fecha: new Date().toISOString().split("T")[0],
-      categoria: "General",
+      concepto: "otro",
       descripcion: "",
     });
     setShowFormGasto(true);
@@ -481,7 +483,7 @@ export default function Ingresos() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Fecha</TableHead>
-                      <TableHead>Categoría</TableHead>
+                      <TableHead>Concepto</TableHead>
                       <TableHead>Descripción</TableHead>
                       <TableHead>Registrado por</TableHead>
                       <TableHead className="text-right">Monto</TableHead>
@@ -492,7 +494,7 @@ export default function Ingresos() {
                     {gastos.map((gas) => (
                       <TableRow key={gas.id}>
                         <TableCell className="text-sm">{gas.fecha}</TableCell>
-                        <TableCell className="text-sm font-medium">{gas.categoria || "General"}</TableCell>
+                        <TableCell className="text-sm font-medium">{gas.concepto_display || gas.concepto}</TableCell>
                         <TableCell className="text-sm">{gas.descripcion || "—"}</TableCell>
                         <TableCell className="text-sm text-neutral-500">{gas.registrado_por_nombre || "Admin"}</TableCell>
                         <TableCell className="text-right font-semibold text-amber-600">
@@ -591,18 +593,15 @@ export default function Ingresos() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1">Categoría</label>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">Concepto</label>
             <select
               className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm bg-white"
-              value={formGasto.categoria || "General"}
-              onChange={(e) => setFormGasto({ ...formGasto, categoria: e.target.value })}
+              value={formGasto.concepto || "otro"}
+              onChange={(e) => setFormGasto({ ...formGasto, concepto: e.target.value as ConceptoGasto })}
             >
-              <option value="Servicios">Servicios (Luz, Agua, Gas, Internet)</option>
-              <option value="Alquiler">Alquiler</option>
-              <option value="Sueldos">Sueldos y Honorarios</option>
-              <option value="Mantenimiento">Mantenimiento y Reparaciones</option>
-              <option value="Impuestos">Impuestos y Tasas</option>
-              <option value="General">General / Otros</option>
+              {CONCEPTOS_GASTO.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
             </select>
           </div>
           <Input

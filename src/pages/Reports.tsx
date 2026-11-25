@@ -368,7 +368,7 @@ export default function Reports() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey="fecha" tick={{ fontSize: 11 }} />
                         <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                        <Tooltip formatter={(value: any) => money(Number(value ?? 0))} />
+                        <Tooltip formatter={(value) => money(Number(value))} />
                         <Area type="monotone" dataKey="Ventas" stroke="#1e40af" fill="url(#colorVentas)" strokeWidth={2} />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -403,7 +403,7 @@ export default function Reports() {
                             <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(value: any) => money(Number(value ?? 0))} />
+                        <Tooltip formatter={(value) => money(Number(value))} />
                         <Legend />
                       </PieChart>
                     </ResponsiveContainer>
@@ -453,7 +453,7 @@ export default function Reports() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                         <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                        <Tooltip formatter={(value: any) => money(Number(value ?? 0))} />
+                        <Tooltip formatter={(value) => money(Number(value))} />
                         <Legend />
                         <Bar dataKey="Valor Stock" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="Ventas" fill="#10b981" radius={[4, 4, 0, 0]} />

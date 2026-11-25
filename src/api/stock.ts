@@ -6,6 +6,7 @@ export type Stock = {
   producto_nombre: string;
   producto_tipo_conservacion: "ambiente" | "heladera" | "freezer";
   producto_dias_caducidad: number | null;
+  producto_unidad_medida: string;
   sub_ubicacion: number;
   sub_ubicacion_nombre: string;
   sub_ubicacion_tipo: "ambiente" | "heladera" | "freezer";

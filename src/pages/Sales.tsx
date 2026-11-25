@@ -67,8 +67,9 @@ function vencimientoTexto(diasParaVencer: number | null, fechaVencimiento: strin
 type CartItem = {
   producto: number;
   producto_nombre: string;
-  sub_ubicacion_origen: number;
+  sub_ubicacion_origen: number | null;
   sub_ubicacion_nombre: string;
+  es_vianda: boolean;
   cantidad: number;
   precio_venta_momento: number;
   stock_disponible: number;
@@ -86,6 +87,7 @@ type ScanSelectionState = {
 export default function Sales() {
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
   const [stock, setStock] = useState<Stock[]>([]);
+  const [viandas, setViandas] = useState<Producto[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [barcodeInput, setBarcodeInput] = useState("");
   const [scanInfo, setScanInfo] = useState<string | null>(null);
@@ -113,8 +115,12 @@ export default function Sales() {
     setLoading(true);
     setErr(null);
     try {
-      const stockData = await listStock({ ubicacion: sucursal ?? undefined, solo_con_stock: true });
+      const [stockData, viandasData] = await Promise.all([
+        listStock({ ubicacion: sucursal ?? undefined, solo_con_stock: true }),
+        listProductos({ es_vianda: true }),
+      ]);
       setStock(stockData);
+      setViandas(viandasData);
     } catch (e: any) {
       setErr(e?.message ?? "Error cargando datos");
     } finally {
@@ -173,6 +179,7 @@ export default function Sales() {
         producto_nombre: producto.nombre,
         sub_ubicacion_origen: stockItem.sub_ubicacion,
         sub_ubicacion_nombre: stockItem.sub_ubicacion_nombre,
+        es_vianda: false,
         cantidad: 1,
         precio_venta_momento: parseFloat(producto.precio_venta),
         stock_disponible: stockItem.cantidad,
@@ -181,6 +188,32 @@ export default function Sales() {
         dias_para_vencer: stockItem.dias_para_vencer,
       }]);
     }
+  };
+
+  // Las viandas no manejan stock: se agregan sin límite y al venderlas solo entra el dinero.
+  const addVianda = (producto: Producto) => {
+    setCart((prev) => {
+      const existente = prev.find((item) => item.es_vianda && item.producto === producto.id);
+      if (existente) {
+        return prev.map((item) => (item === existente ? { ...item, cantidad: item.cantidad + 1 } : item));
+      }
+      return [
+        ...prev,
+        {
+          producto: producto.id,
+          producto_nombre: producto.nombre,
+          sub_ubicacion_origen: null,
+          sub_ubicacion_nombre: "Vianda",
+          es_vianda: true,
+          cantidad: 1,
+          precio_venta_momento: parseFloat(producto.precio_venta),
+          stock_disponible: Number.POSITIVE_INFINITY,
+          lote: null,
+          fecha_vencimiento: null,
+          dias_para_vencer: null,
+        },
+      ];
+    });
   };
 
   const addToCartByBarcode = (rawCode: string) => {
@@ -198,6 +231,12 @@ export default function Sales() {
     const producto = matches.find((p) => (p.sku ?? "").trim().toLowerCase() === code.toLowerCase());
     if (!producto) {
       setErr(`No se encontró producto para el código: ${code}`);
+      return;
+    }
+
+    if (producto.es_vianda) {
+      addVianda(producto);
+      setScanInfo(`Escaneado: ${producto.nombre}`);
       return;
     }
 
@@ -283,9 +322,8 @@ export default function Sales() {
     try {
       const items: VentaItemCreate[] = cart.map(item => ({
         producto: item.producto,
-        sub_ubicacion_origen: item.sub_ubicacion_origen,
+        sub_ubicacion_origen: item.sub_ubicacion_origen ?? undefined,
         cantidad: item.cantidad,
-        precio_venta_momento: item.precio_venta_momento.toString()
       }));
 
       const result = await createVenta({ sucursal: sucursal!, items });
@@ -373,6 +411,31 @@ export default function Sales() {
             </CardBody>
           </Card>
 
+          {/* Viandas: siempre disponibles, no descuentan stock */}
+          {viandas.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Viandas</CardTitle>
+                <CardDescription>No descuentan stock: solo suman el dinero de la venta</CardDescription>
+              </CardHeader>
+              <CardBody>
+                <div className="flex flex-wrap gap-2">
+                  {viandas.map((v) => (
+                    <button
+                      key={v.id}
+                      onClick={() => addVianda(v)}
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm border-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200 hover:border-emerald-300 transition-colors"
+                    >
+                      <span className="font-medium">{v.nombre}</span>
+                      <span className="font-semibold">${parseFloat(v.precio_venta).toFixed(2)}</span>
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  ))}
+                </div>
+              </CardBody>
+            </Card>
+          )}
+
           {/* Buscador */}
           <Card>
             <CardBody>
@@ -405,6 +468,23 @@ export default function Sales() {
                 <div className="divide-y divide-neutral-200">
                   {(() => {
                     const producto = selectedProduct;
+                    if (producto.es_vianda) {
+                      return (
+                        <div className="p-4 flex items-center justify-between gap-4">
+                          <div>
+                            <h3 className="font-semibold text-neutral-900">{producto.nombre}</h3>
+                            <p className="text-sm text-neutral-500">Vianda · no maneja stock</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-emerald-600">${parseFloat(producto.precio_venta).toFixed(2)}</p>
+                            <Button size="sm" onClick={() => addVianda(producto)}>
+                              <Plus className="h-4 w-4" />
+                              Agregar
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    }
                     const stockItems = getStockForProduct(producto.id);
                     const totalStock = stockItems.reduce((sum, s) => sum + s.cantidad, 0);
 
@@ -538,7 +618,7 @@ export default function Sales() {
                             </div>
                             <button
                               onClick={() => removeFromCart(index)}
-                              className="text-red-500 hover:text-red-700 p-1"
+                              className="text-red-500 hover:text-red-700 p-2 sm:p-1"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -549,7 +629,7 @@ export default function Sales() {
                             <button
                               onClick={() => updateCartItemQuantity(index, item.cantidad - 1)}
                               disabled={item.cantidad <= 1}
-                              className="w-7 h-7 flex items-center justify-center bg-white border border-neutral-300 rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-50"
+                              className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center bg-white border border-neutral-300 rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-50"
                             >
                               -
                             </button>
@@ -557,14 +637,14 @@ export default function Sales() {
                               type="number"
                               value={item.cantidad}
                               onChange={(e) => updateCartItemQuantity(index, parseInt(e.target.value) || 1)}
-                              className="w-12 text-center border border-neutral-300 rounded py-1 text-sm"
+                              className="w-14 sm:w-12 text-center border border-neutral-300 rounded py-2 sm:py-1 text-sm"
                               min="1"
-                              max={item.stock_disponible}
+                              max={item.es_vianda ? undefined : item.stock_disponible}
                             />
                             <button
                               onClick={() => updateCartItemQuantity(index, item.cantidad + 1)}
                               disabled={item.cantidad >= item.stock_disponible}
-                              className="w-7 h-7 flex items-center justify-center bg-white border border-neutral-300 rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-50"
+                              className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center bg-white border border-neutral-300 rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-50"
                             >
                               +
                             </button>

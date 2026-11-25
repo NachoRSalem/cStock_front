@@ -38,10 +38,43 @@ import {
   TableCell,
   ConfirmDialog
 } from "../components/ui";
+import { UNIDADES, esUnidadConocida, precioNormalizado, formatoPrecio, sonCompatibles, type UnidadMedida } from "../utils/units";
 import { Plus, Edit2, Trash2, Package, Tag, Thermometer, Refrigerator, Snowflake, Search, DollarSign, Filter, PackagePlus } from "lucide-react";
 import clsx from 'clsx';
 
 type TabType = "productos" | "categorias";
+
+type ProductoForm = {
+  nombre: string;
+  categoria: number;
+  tipo_conservacion: "ambiente" | "heladera" | "freezer";
+  precio_venta: string;
+  costo_compra: string;
+  es_fabricable: boolean;
+  es_vianda: boolean;
+  sku: string;
+  dias_caducidad: number | null;
+  unidad_medida: string;
+  cantidad_envase: string;
+  unidad_envase: UnidadMedida;
+  precio_envase: string;
+};
+
+const FORM_VACIO: ProductoForm = {
+  nombre: "",
+  categoria: 0,
+  tipo_conservacion: "ambiente",
+  precio_venta: "",
+  costo_compra: "",
+  es_fabricable: false,
+  es_vianda: false,
+  sku: "",
+  dias_caducidad: null,
+  unidad_medida: "unidad",
+  cantidad_envase: "",
+  unidad_envase: "unidad",
+  precio_envase: "",
+};
 
 export default function Products() {
   const session = tokenStorage.getSession();
@@ -62,17 +95,7 @@ export default function Products() {
   // Formulario producto
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Producto | null>(null);
-  const [productForm, setProductForm] = useState<ProductoCreateUpdate>({
-    nombre: "",
-    categoria: 0,
-    tipo_conservacion: "ambiente",
-    precio_venta: "",
-    costo_compra: "",
-    es_fabricable: false,
-    sku: "",
-    dias_caducidad: null,
-    unidad_medida: ""
-  });
+  const [productForm, setProductForm] = useState<ProductoForm>(FORM_VACIO);
   const [barcodeScanInput, setBarcodeScanInput] = useState("");
   const [barcodeScanInfo, setBarcodeScanInfo] = useState<string | null>(null);
   const [productFormErr, setProductFormErr] = useState<string | null>(null);
@@ -144,23 +167,17 @@ export default function Products() {
         precio_venta: product.precio_venta,
         costo_compra: product.costo_compra,
         es_fabricable: product.es_fabricable,
+        es_vianda: product.es_vianda,
         sku: product.sku || "",
         dias_caducidad: product.dias_caducidad,
-        unidad_medida: product.unidad_medida || ""
+        unidad_medida: product.unidad_medida || "unidad",
+        cantidad_envase: product.cantidad_envase ? String(parseFloat(product.cantidad_envase)) : "",
+        unidad_envase: product.unidad_envase || (esUnidadConocida(product.unidad_medida) ? product.unidad_medida : "unidad"),
+        precio_envase: product.precio_envase ?? "",
       });
     } else {
       setEditingProduct(null);
-      setProductForm({
-        nombre: "",
-        categoria: categorias[0]?.id || 0,
-        tipo_conservacion: "ambiente",
-        precio_venta: "",
-        costo_compra: "",
-        es_fabricable: false,
-        sku: "",
-        dias_caducidad: null,
-        unidad_medida: ""
-      });
+      setProductForm({ ...FORM_VACIO, categoria: categorias[0]?.id || 0 });
     }
     setShowProductForm(true);
   }
@@ -204,9 +221,33 @@ export default function Products() {
     barcodeScanRef.current?.focus();
   }
 
+  // Precio normalizado: lo pagado por el envase expresado por unidad principal.
+  const cantidadEnvaseNum = parseFloat(productForm.cantidad_envase);
+  const precioEnvaseNum = parseFloat(productForm.precio_envase);
+  const tieneEnvase = productForm.cantidad_envase !== "" && productForm.precio_envase !== "";
+  const hayEnvaseParcial = !tieneEnvase && (productForm.cantidad_envase !== "" || productForm.precio_envase !== "");
+  const precioNorm = tieneEnvase
+    ? precioNormalizado(precioEnvaseNum, cantidadEnvaseNum, productForm.unidad_envase, productForm.unidad_medida)
+    : null;
+  const unidadesIncompatibles =
+    tieneEnvase && !sonCompatibles(productForm.unidad_envase, productForm.unidad_medida);
+
   async function handleSaveProduct() {
-    if (!productForm.nombre || !productForm.categoria || !productForm.unidad_medida?.trim()) {
-      setProductFormErr("Completá todos los campos obligatorios (incluyendo la unidad de medida)");
+    const esVianda = productForm.es_vianda;
+    if (!productForm.nombre.trim() || !productForm.precio_venta || (!esVianda && !productForm.categoria)) {
+      setProductFormErr("Completá todos los campos obligatorios");
+      return;
+    }
+    if (!esVianda && !tieneEnvase && !productForm.costo_compra) {
+      setProductFormErr("Indicá el costo de compra o los datos del envase");
+      return;
+    }
+    if (!esVianda && hayEnvaseParcial) {
+      setProductFormErr("Para calcular el precio normalizado completá cantidad, unidad y precio del envase");
+      return;
+    }
+    if (!esVianda && tieneEnvase && precioNorm === null) {
+      setProductFormErr("La unidad del envase no es comparable con la unidad principal (kg/g, l/ml o unidad)");
       return;
     }
 
@@ -228,10 +269,30 @@ export default function Products() {
     setErr(null);
     setProductFormErr(null);
     try {
-      const payload: ProductoCreateUpdate = {
-        ...productForm,
-        sku: skuNormalized || null,
-      };
+      const payload: ProductoCreateUpdate = esVianda
+        ? {
+            // Vianda: sin costo, conservación, vencimiento ni envase. Solo precio de venta.
+            nombre: productForm.nombre.trim(),
+            precio_venta: productForm.precio_venta,
+            es_vianda: true,
+            es_fabricable: false,
+            sku: skuNormalized || null,
+          }
+        : {
+            nombre: productForm.nombre.trim(),
+            categoria: productForm.categoria,
+            tipo_conservacion: productForm.tipo_conservacion,
+            precio_venta: productForm.precio_venta,
+            costo_compra: tieneEnvase && precioNorm !== null ? precioNorm : productForm.costo_compra,
+            es_fabricable: productForm.es_fabricable,
+            es_vianda: false,
+            sku: skuNormalized || null,
+            dias_caducidad: productForm.dias_caducidad,
+            unidad_medida: productForm.unidad_medida,
+            cantidad_envase: tieneEnvase ? productForm.cantidad_envase : null,
+            unidad_envase: tieneEnvase ? productForm.unidad_envase : null,
+            precio_envase: tieneEnvase ? productForm.precio_envase : null,
+          };
 
       if (editingProduct) {
         await updateProducto(editingProduct.id, payload);
@@ -488,11 +549,11 @@ export default function Products() {
       {err && <Alert variant="error">{err}</Alert>}
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-neutral-200">
+      <div className="flex gap-1 sm:gap-2 border-b border-neutral-200">
         <button
           onClick={() => setTab("productos")}
           className={clsx(
-            "flex items-center gap-2 px-4 py-3 font-medium text-sm border-b-2 transition-colors",
+            "flex flex-1 sm:flex-none items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-3 font-medium text-sm border-b-2 transition-colors",
             tab === "productos"
               ? "border-primary-500 text-primary-600"
               : "border-transparent text-neutral-600 hover:text-neutral-900 hover:border-neutral-300"
@@ -505,7 +566,7 @@ export default function Products() {
         <button
           onClick={() => setTab("categorias")}
           className={clsx(
-            "flex items-center gap-2 px-4 py-3 font-medium text-sm border-b-2 transition-colors",
+            "flex flex-1 sm:flex-none items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-3 font-medium text-sm border-b-2 transition-colors",
             tab === "categorias"
               ? "border-primary-500 text-primary-600"
               : "border-transparent text-neutral-600 hover:text-neutral-900 hover:border-neutral-300"
@@ -572,10 +633,11 @@ export default function Products() {
                     Tipo de producto <span className="text-red-500">*</span>
                   </label>
                   <select
-                    value={productForm.es_fabricable ? "fabricable" : "normal"}
+                    value={productForm.es_vianda ? "vianda" : productForm.es_fabricable ? "fabricable" : "normal"}
                     onChange={(e) =>
                       setProductForm({
                         ...productForm,
+                        es_vianda: e.target.value === "vianda",
                         es_fabricable: e.target.value === "fabricable",
                       })
                     }
@@ -583,10 +645,16 @@ export default function Products() {
                   >
                     <option value="normal">Producto normal</option>
                     <option value="fabricable">Producto fabricable (a partir de insumos)</option>
+                    <option value="vianda">Vianda (sin stock ni costo de compra)</option>
                   </select>
                   {productForm.es_fabricable && (
                     <div className="mt-2 text-xs text-amber-700">
                       Luego podés configurar la receta en el módulo de Fabricación.
+                    </div>
+                  )}
+                  {productForm.es_vianda && (
+                    <div className="mt-2 text-xs text-amber-700">
+                      Las viandas no llevan stock ni precio de compra: al venderlas solo entra el dinero.
                     </div>
                   )}
                 </div>
@@ -596,39 +664,43 @@ export default function Products() {
                   required
                   value={productForm.nombre}
                   onChange={(e) => setProductForm({ ...productForm, nombre: e.target.value })}
-                  placeholder="Ej: Coca Cola 500ml"
+                  placeholder={productForm.es_vianda ? "Ej: Milanesa con puré" : "Ej: Coca Cola 500ml"}
                 />
 
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Categoría <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={productForm.categoria}
-                    onChange={(e) => setProductForm({ ...productForm, categoria: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
-                  >
-                    <option value="">Seleccionar...</option>
-                    {categorias.map(cat => (
-                      <option key={cat.id} value={cat.id}>{cat.nombre}</option>
-                    ))}
-                  </select>
-                </div>
+                {!productForm.es_vianda && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700 mb-2">
+                        Categoría <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={productForm.categoria}
+                        onChange={(e) => setProductForm({ ...productForm, categoria: Number(e.target.value) })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                      >
+                        <option value="">Seleccionar...</option>
+                        {categorias.map(cat => (
+                          <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Tipo de conservación <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={productForm.tipo_conservacion}
-                    onChange={(e) => setProductForm({ ...productForm, tipo_conservacion: e.target.value as any })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
-                  >
-                    <option value="ambiente">🌡️ Temperatura Ambiente</option>
-                    <option value="heladera">❄️ Heladera</option>
-                    <option value="freezer">🧊 Freezer</option>
-                  </select>
-                </div>
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700 mb-2">
+                        Tipo de conservación <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={productForm.tipo_conservacion}
+                        onChange={(e) => setProductForm({ ...productForm, tipo_conservacion: e.target.value as ProductoForm["tipo_conservacion"] })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                      >
+                        <option value="ambiente">🌡️ Temperatura Ambiente</option>
+                        <option value="heladera">❄️ Heladera</option>
+                        <option value="freezer">🧊 Freezer</option>
+                      </select>
+                    </div>
+                  </>
+                )}
 
                 <Input
                   label="SKU / Código de barras"
@@ -637,70 +709,114 @@ export default function Products() {
                   placeholder="Ingresalo manualmente o con lector"
                 />
 
-                <Input
-                  label="Días de caducidad"
-                  type="number"
-                  value={productForm.dias_caducidad || ""}
-                  onChange={(e) => setProductForm({ ...productForm, dias_caducidad: e.target.value ? parseInt(e.target.value) : null })}
-                  placeholder="Ej: 90 días = 3 meses"
-                  helperText="Días desde la compra hasta el vencimiento (opcional)"
-                />
-
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Unidad de medida <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex gap-2">
-                    <select
-                      value={["unidad", "kg", "g", "l", "ml", "pack", "caja", "porción"].includes(productForm.unidad_medida ?? "") ? (productForm.unidad_medida ?? "unidad") : "otro"}
-                      onChange={(e) => {
-                        if (e.target.value !== "otro") {
-                          setProductForm({ ...productForm, unidad_medida: e.target.value });
-                        }
-                      }}
-                      className="w-1/2 px-3 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 border-neutral-300"
-                    >
-                      <option value="unidad">unidad</option>
-                      <option value="kg">kg (kilogramos)</option>
-                      <option value="g">g (gramos)</option>
-                      <option value="l">l (litros)</option>
-                      <option value="ml">ml (mililitros)</option>
-                      <option value="pack">pack</option>
-                      <option value="caja">caja</option>
-                      <option value="porción">porción</option>
-                      <option value="otro">Otro / Personalizado</option>
-                    </select>
-                    <input
-                      type="text"
-                      value={productForm.unidad_medida || ""}
-                      onChange={(e) => setProductForm({ ...productForm, unidad_medida: e.target.value })}
-                      placeholder="Ej: kg, g, unidad"
-                      required
-                      className="w-1/2 px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 border-neutral-300"
+                {!productForm.es_vianda && (
+                  <>
+                    <Input
+                      label="Días de caducidad"
+                      type="number"
+                      value={productForm.dias_caducidad || ""}
+                      onChange={(e) => setProductForm({ ...productForm, dias_caducidad: e.target.value ? parseInt(e.target.value) : null })}
+                      placeholder="Ej: 90 días = 3 meses"
+                      helperText="Días desde la compra hasta el vencimiento (opcional)"
                     />
-                  </div>
-                  <p className="mt-1 text-xs text-neutral-500">Dato obligatorio (ej: unidad, kg, g, l, ml)</p>
-                </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700 mb-2">
+                        Unidad de medida <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={productForm.unidad_medida}
+                        onChange={(e) => setProductForm({ ...productForm, unidad_medida: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                      >
+                        {UNIDADES.map((u) => (
+                          <option key={u.value} value={u.value}>{u.label}</option>
+                        ))}
+                        {!esUnidadConocida(productForm.unidad_medida) && (
+                          // Unidad cargada antes de la lista cerrada (pack, caja...): se conserva mientras no la cambies.
+                          <option value={productForm.unidad_medida}>{productForm.unidad_medida} (anterior)</option>
+                        )}
+                      </select>
+                      <p className="mt-1.5 text-xs text-neutral-500">Unidad en la que se maneja el stock y el consumo</p>
+                    </div>
+                  </>
+                )}
 
                 <Input
                   label="Precio de venta"
                   type="number"
                   step="0.01"
+                  min="0"
                   required
                   value={productForm.precio_venta}
                   onChange={(e) => setProductForm({ ...productForm, precio_venta: e.target.value })}
                   placeholder="0.00"
                 />
 
-                <Input
-                  label="Costo de compra"
-                  type="number"
-                  step="0.01"
-                  required
-                  value={productForm.costo_compra}
-                  onChange={(e) => setProductForm({ ...productForm, costo_compra: e.target.value })}
-                  placeholder="0.00"
-                />
+                {!productForm.es_vianda && (
+                  <>
+                    <Input
+                      label="Cantidad del envase"
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      value={productForm.cantidad_envase}
+                      onChange={(e) => setProductForm({ ...productForm, cantidad_envase: e.target.value })}
+                      placeholder="Ej: 10"
+                      helperText="Cuánto trae cada envase que comprás"
+                    />
+
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700 mb-2">Unidad del envase</label>
+                      <select
+                        value={productForm.unidad_envase}
+                        onChange={(e) => setProductForm({ ...productForm, unidad_envase: e.target.value as UnidadMedida })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent border-neutral-300 hover:border-neutral-400"
+                      >
+                        {UNIDADES.map((u) => (
+                          <option key={u.value} value={u.value}>{u.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <Input
+                      label="Precio final pagado por el envase"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={productForm.precio_envase}
+                      onChange={(e) => setProductForm({ ...productForm, precio_envase: e.target.value })}
+                      placeholder="0.00"
+                    />
+
+                    <Input
+                      label="Costo de compra (por unidad)"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required={!tieneEnvase}
+                      disabled={tieneEnvase && precioNorm !== null}
+                      value={tieneEnvase && precioNorm !== null ? precioNorm : productForm.costo_compra}
+                      onChange={(e) => setProductForm({ ...productForm, costo_compra: e.target.value })}
+                      placeholder="0.00"
+                      helperText={tieneEnvase ? "Se calcula con los datos del envase" : "O completá los datos del envase para calcularlo"}
+                    />
+
+                    {(precioNorm !== null || unidadesIncompatibles) && (
+                      <div className="md:col-span-2">
+                        {precioNorm !== null ? (
+                          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+                            Precio normalizado: {formatoPrecio(precioNorm)} el {productForm.unidad_medida}
+                          </div>
+                        ) : (
+                          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                            No se puede calcular: la unidad del envase ({productForm.unidad_envase}) y la unidad principal ({productForm.unidad_medida}) son magnitudes distintas.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
 
@@ -817,8 +933,8 @@ export default function Products() {
                             <Badge variant="default">{prod.categoria_nombre}</Badge>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge variant={prod.es_fabricable ? "pending" : "approved"}>
-                              {prod.es_fabricable ? "Fabricable" : "Normal"}
+                            <Badge variant={prod.es_vianda ? "info" : prod.es_fabricable ? "pending" : "approved"}>
+                              {prod.es_vianda ? "Vianda" : prod.es_fabricable ? "Fabricable" : "Normal"}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center">
@@ -835,7 +951,8 @@ export default function Products() {
                             </div>
                           </TableCell>
                           <TableCell className="text-right text-neutral-600">
-                            ${parseFloat(prod.costo_compra).toFixed(2)}
+                            {prod.es_vianda ? "—" : `$${parseFloat(prod.costo_compra).toFixed(2)}`}
+                            {!prod.es_vianda && <span className="text-xs text-neutral-400"> /{prod.unidad_medida}</span>}
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center justify-center gap-2">
@@ -857,7 +974,7 @@ export default function Products() {
                               >
                                 <DollarSign className="h-4 w-4" />
                               </Button>
-                              {isAdmin && (
+                              {isAdmin && !prod.es_vianda && (
                                 <Button
                                   variant="ghost"
                                   size="sm"

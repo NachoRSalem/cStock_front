@@ -1,4 +1,5 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Outlet } from "react-router-dom";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 
 import Login from "./pages/Login";
@@ -22,6 +23,7 @@ import Users from "./pages/Users";
 import Stock from "./pages/Stock";
 import AdminStockView from "./pages/AdminStockView";
 import Ingresos from "./pages/Ingresos";
+import Viandas from "./pages/Viandas";
 import ConsumoCocina from "./pages/ConsumoCocina";
 import NotFound from "./pages/NotFound";
 
@@ -30,34 +32,59 @@ export const router = createBrowserRouter([
 
   {
     path: "/",
-    element: <Layout />, //
+    element: (
+      <ProtectedRoute>
+        <Layout />
+      </ProtectedRoute>
+    ),
     children: [
       // "/" -> redirige según rol
       { index: true, element: <Home /> },
 
-      // ADMIN 
-      { path: "admin", element: <AdminDashboard /> },
-      { path: "admin/locations", element: <Locations /> },
-      { path: "admin/stock", element: <AdminStockView /> },
-      { path: "admin/orders", element: <Orders /> },
-      { path: "admin/sales", element: <AdminSalesView /> },
-      { path: "admin/reports", element: <Reports /> },
-      { path: "admin/users", element: <Users /> },
-      { path: "admin/ingresos", element: <Ingresos /> },
-      { path: "admin/products", element: <Products /> },
-      { path: "admin/manufacture", element: <Manufacture /> },
-      { path: "admin/manufacture-history", element: <ManufactureHistory /> },
-      { path: "admin/consumo-cocina", element: <ConsumoCocina /> },
+      // ADMIN
+      {
+        path: "admin",
+        element: (
+          <ProtectedRoute role="admin">
+            <Outlet />
+          </ProtectedRoute>
+        ),
+        children: [
+          { index: true, element: <AdminDashboard /> },
+          { path: "locations", element: <Locations /> },
+          { path: "stock", element: <AdminStockView /> },
+          { path: "orders", element: <Orders /> },
+          { path: "sales", element: <AdminSalesView /> },
+          { path: "reports", element: <Reports /> },
+          { path: "users", element: <Users /> },
+          { path: "ingresos", element: <Ingresos /> },
+          { path: "products", element: <Products /> },
+          { path: "viandas", element: <Viandas /> },
+          { path: "manufacture", element: <Manufacture /> },
+          { path: "manufacture-history", element: <ManufactureHistory /> },
+          { path: "consumo-cocina", element: <ConsumoCocina /> },
+        ],
+      },
 
       // SUCURSAL
-      { path: "sucursal", element: <BranchDashboard /> },
-      { path: "sucursal/stock", element: <Stock /> },
-      { path: "sucursal/orders", element: <Orders /> },
-      { path: "sucursal/sales", element: <Sales /> },
-      { path: "sucursal/ventas", element: <SucursalSalesView /> },
-      { path: "sucursal/manufacture", element: <Manufacture /> },
-      { path: "sucursal/manufacture-history", element: <ManufactureHistory /> },
-      { path: "sucursal/consumo-cocina", element: <ConsumoCocina /> },
+      {
+        path: "sucursal",
+        element: (
+          <ProtectedRoute role="sucursal">
+            <Outlet />
+          </ProtectedRoute>
+        ),
+        children: [
+          { index: true, element: <BranchDashboard /> },
+          { path: "stock", element: <Stock /> },
+          { path: "orders", element: <Orders /> },
+          { path: "sales", element: <Sales /> },
+          { path: "ventas", element: <SucursalSalesView /> },
+          { path: "manufacture", element: <Manufacture /> },
+          { path: "manufacture-history", element: <ManufactureHistory /> },
+          { path: "consumo-cocina", element: <ConsumoCocina /> },
+        ],
+      },
 
       // 404
       { path: "*", element: <NotFound /> },

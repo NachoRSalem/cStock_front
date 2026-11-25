@@ -24,8 +24,9 @@ const buttonVariants = cva(
           'text-primary-500 hover:text-primary-600 underline-offset-4 hover:underline',
       },
       size: {
-        sm: 'text-sm px-3 py-1.5 h-8',
-        md: 'text-sm px-4 py-2 h-10',
+        // Alto táctil (40px) en celulares; compacto (32px) desde sm.
+        sm: 'text-sm px-3 py-1.5 h-10 sm:h-8',
+        md: 'text-sm px-4 py-2 h-11 sm:h-10',
         lg: 'text-base px-6 py-3 h-12',
         icon: 'h-10 w-10',
       },

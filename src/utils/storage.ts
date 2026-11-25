@@ -11,9 +11,15 @@ export type SessionData = {
 
 export const tokenStorage = {
   getSession(): SessionData | null {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw) as SessionData;
+    } catch {
+      // Sesión corrupta: se descarta en lugar de romper la app.
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
   },
 
   getAccess(): string | null {

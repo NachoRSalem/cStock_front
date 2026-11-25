@@ -62,3 +62,91 @@
     text-wrap: balance;
   }
 }
+
+
+/* =========================================
+   RESPONSIVE: tablas apiladas y controles táctiles (pantallas < 640px)
+========================================= */
+@media (max-width: 639px) {
+  /* Cada fila de una tabla pasa a ser una tarjeta: título arriba y "etiqueta: valor" debajo.
+     Los selectores usan ">" para no afectar tablas anidadas dentro de una fila expandida. */
+  .table-stack,
+  .table-stack > tbody {
+    display: block;
+  }
+
+  .table-stack > thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .table-stack > tbody > tr {
+    display: block;
+    padding: 0.75rem 1rem;
+  }
+
+  .table-stack > tbody > tr > td {
+    display: block;
+    position: relative;
+    padding: 0.35rem 0 0.35rem 48%;
+    text-align: right;
+    min-height: 2.3rem;
+  }
+
+  .table-stack > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    position: absolute;
+    left: 0;
+    top: 0.5rem;
+    width: 44%;
+    text-align: left;
+    font-size: 0.68rem;
+    line-height: 1.15;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #6b7280;
+  }
+
+  /* Primera columna = título de la tarjeta. */
+  .table-stack > tbody > tr > td:first-child {
+    padding: 0 0 0.25rem;
+    min-height: 0;
+    text-align: left;
+    font-weight: 600;
+  }
+
+  /* Filas de detalle / estado vacío (colSpan): ocupan todo el ancho sin etiqueta. */
+  .table-stack > tbody > tr > td[colspan] {
+    padding: 0;
+    min-height: 0;
+    text-align: left;
+  }
+
+  .table-stack > tbody > tr:has(> td[colspan]) {
+    padding: 0;
+  }
+
+  /* Celda de acciones (columna sin encabezado): ocupa todo el ancho, botones a la derecha. */
+  .table-stack > tbody > tr > td:not([data-label]):not(:first-child):not([colspan]) {
+    padding-left: 0;
+    min-height: 0;
+    text-align: right;
+  }
+
+  /* Si los botones de acciones no entran en una línea (pantallas de 320px), bajan a la siguiente. */
+  .table-stack > tbody > tr > td:not([data-label]):not(:first-child):not([colspan]) > div {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  /* Evita el zoom automático de iOS al enfocar un campo (requiere >= 16px). */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

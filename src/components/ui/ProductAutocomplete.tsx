@@ -15,6 +15,10 @@ type ProductAutocompleteProps = {
   categoriaName?: string;  // filtra por nombre de categoría en el cliente
   className?: string;
   allowClear?: boolean;
+  /** Muestra la unidad de medida entre paréntesis junto al nombre. */
+  showUnit?: boolean;
+  /** Oculta las viandas (productos sin stock). */
+  excludeViandas?: boolean;
 };
 
 export function ProductAutocomplete({
@@ -29,6 +33,8 @@ export function ProductAutocomplete({
   categoriaName,
   className,
   allowClear = true,
+  showUnit,
+  excludeViandas,
 }: ProductAutocompleteProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -75,6 +81,7 @@ export function ProductAutocomplete({
           search: query || undefined,
           limit: 20,
           es_fabricable: onlyFabricable,
+          es_vianda: excludeViandas ? false : undefined,
           categoria: categoria,
         });
 
@@ -120,7 +127,7 @@ export function ProductAutocomplete({
     }, 250);
 
     return () => window.clearTimeout(timer);
-  }, [open, query, excludeIdsKey, value, onlyFabricable, categoria, categoriaName]);
+  }, [open, query, excludeIdsKey, value, onlyFabricable, categoria, categoriaName, excludeViandas]);
 
   const hasResults = useMemo(() => options.length > 0, [options]);
 
@@ -179,7 +186,10 @@ export function ProductAutocomplete({
                 }}
                 className="w-full px-3 py-2 text-left text-sm hover:bg-primary-50 border-b border-neutral-100 last:border-b-0"
               >
-                <div className="font-medium text-neutral-900">{p.nombre}</div>
+                <div className="font-medium text-neutral-900">
+                  {p.nombre}
+                  {showUnit && <span className="font-normal text-neutral-500"> ({p.unidad_medida})</span>}
+                </div>
                 <div className="text-xs text-neutral-500">
                   {p.categoria_nombre}
                   {p.sku ? ` • SKU: ${p.sku}` : ""}

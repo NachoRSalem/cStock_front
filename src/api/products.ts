@@ -1,4 +1,5 @@
 import { apiFetch } from "./http";
+import type { UnidadMedida } from "../utils/units";
 
 export type Categoria = {
   id: number;
@@ -14,21 +15,29 @@ export type Producto = {
   precio_venta: string;
   costo_compra: string;
   es_fabricable: boolean;
+  es_vianda: boolean;
   sku: string | null;
   dias_caducidad: number | null;
-  unidad_medida: string | null;
+  unidad_medida: string;
+  cantidad_envase: string | null;
+  unidad_envase: UnidadMedida | null;
+  precio_envase: string | null;
 };
 
 export type ProductoCreateUpdate = {
   nombre: string;
-  categoria: number;
-  tipo_conservacion: "ambiente" | "heladera" | "freezer";
+  categoria?: number;
+  tipo_conservacion?: "ambiente" | "heladera" | "freezer";
   precio_venta: string | number;
-  costo_compra: string | number;
-  es_fabricable: boolean;
+  costo_compra?: string | number;
+  es_fabricable?: boolean;
+  es_vianda?: boolean;
   sku?: string | null;
   dias_caducidad?: number | null;
-  unidad_medida?: string | null;
+  unidad_medida?: string;
+  cantidad_envase?: string | number | null;
+  unidad_envase?: UnidadMedida | null;
+  precio_envase?: string | number | null;
 };
 
 export type CategoriaCreateUpdate = {
@@ -41,6 +50,7 @@ export function listProductos(params?: {
   search?: string;
   limit?: number;
   es_fabricable?: boolean;
+  es_vianda?: boolean;
 }) {
   const query = new URLSearchParams();
   if (params?.tipo_conservacion) query.set("tipo_conservacion", params.tipo_conservacion);
@@ -48,6 +58,7 @@ export function listProductos(params?: {
   if (params?.search) query.set("search", params.search);
   if (params?.limit) query.set("limit", params.limit.toString());
   if (typeof params?.es_fabricable === "boolean") query.set("es_fabricable", params.es_fabricable ? "true" : "false");
+  if (typeof params?.es_vianda === "boolean") query.set("es_vianda", params.es_vianda ? "true" : "false");
   
   const queryString = query.toString();
   return apiFetch<Producto[]>(`/api/products/productos/${queryString ? "?" + queryString : ""}`);
@@ -59,6 +70,10 @@ export function getProducto(id: number) {
 
 export function createProducto(body: ProductoCreateUpdate) {
   return apiFetch<Producto>("/api/products/productos/", { method: "POST", body });
+}
+
+export function patchProducto(id: number, body: Partial<ProductoCreateUpdate>) {
+  return apiFetch<Producto>(`/api/products/productos/${id}/`, { method: "PATCH", body });
 }
 
 export function updateProducto(id: number, body: ProductoCreateUpdate) {

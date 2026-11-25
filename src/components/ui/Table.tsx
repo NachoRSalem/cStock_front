@@ -1,15 +1,58 @@
-import { type HTMLAttributes, forwardRef } from 'react';
+import { type HTMLAttributes, forwardRef, useCallback, useEffect, useRef } from 'react';
 import clsx from 'clsx';
+
+/**
+ * Copia el texto de cada encabezado como `data-label` en las celdas de su columna.
+ * En pantallas chicas (ver `.table-stack` en app.css) cada fila se muestra como una tarjeta
+ * y ese label indica a qué columna corresponde cada valor.
+ */
+function labelCells(table: HTMLTableElement) {
+  const heads = Array.from(table.querySelectorAll(':scope > thead > tr > th')).map((th) => th.textContent?.trim() ?? '');
+  table.querySelectorAll(':scope > tbody > tr').forEach((tr) => {
+    let col = 0;
+    Array.from(tr.children).forEach((cell) => {
+      if (!(cell instanceof HTMLTableCellElement) || cell.tagName !== 'TD') return;
+      // La primera columna hace de título de la tarjeta; las filas con colSpan (detalle, vacío) no se etiquetan.
+      // La columna de acciones no lleva etiqueta: sus botones usan todo el ancho de la tarjeta.
+      const label = heads[col];
+      if (cell.colSpan === 1 && col > 0 && label && !/^acciones?$/i.test(label) && cell.dataset.label !== label) {
+        cell.dataset.label = label;
+      }
+      col += cell.colSpan || 1;
+    });
+  });
+}
 
 export const Table = forwardRef<
   HTMLTableElement,
-  HTMLAttributes<HTMLTableElement>
->(({ className, ...props }, ref) => {
+  HTMLAttributes<HTMLTableElement> & { stack?: boolean }
+>(({ className, stack = true, ...props }, ref) => {
+  const innerRef = useRef<HTMLTableElement | null>(null);
+
+  const setRefs = useCallback(
+    (node: HTMLTableElement | null) => {
+      innerRef.current = node;
+      if (typeof ref === 'function') ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref]
+  );
+
+  useEffect(() => {
+    const table = innerRef.current;
+    if (!stack || !table) return;
+    labelCells(table);
+    // Las filas pueden aparecer sin que Table se vuelva a renderizar (por ejemplo al expandir una fila).
+    const observer = new MutationObserver(() => labelCells(table));
+    observer.observe(table, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [stack]);
+
   return (
     <div className="w-full overflow-x-auto rounded-xl border border-neutral-200 shadow-soft custom-scrollbar">
       <table
-        ref={ref}
-        className={clsx('w-full border-collapse', className)}
+        ref={setRefs}
+        className={clsx('w-full border-collapse', stack && 'table-stack', className)}
         {...props}
       />
     </div>

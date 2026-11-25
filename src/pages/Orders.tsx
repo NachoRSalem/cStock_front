@@ -284,9 +284,13 @@ export default function Orders() {
               precio_venta: "0",
               costo_compra: item.precio_costo_momento,
               es_fabricable: false,
+              es_vianda: false,
               sku: null,
               dias_caducidad: null,
-              unidad_medida: null,
+              unidad_medida: "unidad",
+              cantidad_envase: null,
+              unidad_envase: null,
+              precio_envase: null,
             };
           }
         });
@@ -1029,6 +1033,7 @@ export default function Orders() {
                   Producto
                 </label>
                 <ProductAutocomplete
+                excludeViandas
                   value={filtroProducto}
                   selectedName={getNombreProducto(filtroProducto)}
                   onSelect={(product) => {
@@ -1193,6 +1198,7 @@ export default function Orders() {
                         <div className="flex-1 space-y-3">
                             <div>
                               <ProductAutocomplete
+                excludeViandas
                                 value={item.producto || null}
                                 selectedName={getNombreProducto(item.producto || null)}
                                 onSelect={(product) => {
@@ -1341,6 +1347,7 @@ export default function Orders() {
                       >
                         <div className="flex-1 space-y-3">
                           <ProductAutocomplete
+                excludeViandas
                             value={item.producto || null}
                             selectedName={getNombreProducto(item.producto || null)}
                             onSelect={(product) => {

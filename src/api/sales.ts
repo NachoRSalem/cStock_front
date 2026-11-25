@@ -2,9 +2,10 @@ import { apiFetch } from "./http";
 
 export type VentaItemCreate = {
   producto: number;
-  sub_ubicacion_origen: number;
+  /** Las viandas no salen de ninguna sub-ubicación: se omite. */
+  sub_ubicacion_origen?: number;
   cantidad: number;
-  precio_venta_momento: string | number;
+  precio_venta_momento?: string | number;
 };
 export type VentaCreateBody = { sucursal: number; items: VentaItemCreate[] };
 export type Venta = { id: number };
@@ -13,7 +14,7 @@ export type VentaItem = {
   id: number;
   producto: number;
   producto_nombre: string;
-  sub_ubicacion_origen: number;
+  sub_ubicacion_origen: number | null;
   cantidad: number;
   precio_venta_momento: string;
 };
@@ -26,6 +27,9 @@ export type VentaDetalle = {
   sucursal_nombre: string;
   fecha: string;
   total: string;
+  estado: "completada" | "anulada";
+  anulada_en: string | null;
+  anulada_por_nombre: string | null;
   items: VentaItem[];
 };
 
@@ -38,6 +42,10 @@ export type VentasPaginadas = {
 
 export function createVenta(body: VentaCreateBody) {
   return apiFetch<Venta>("/api/sales/ventas/", { method: "POST", body });
+}
+
+export function anularVenta(id: number) {
+  return apiFetch<VentaDetalle>(`/api/sales/ventas/${id}/anular/`, { method: "POST" });
 }
 
 export function listVentas(params?: { sucursal?: number; page?: number }) {

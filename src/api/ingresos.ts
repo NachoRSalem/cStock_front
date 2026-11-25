@@ -20,12 +20,30 @@ export type IngresoCreateUpdate = {
   medio_pago?: string;
 };
 
+/** Conceptos que acepta el servidor (campo `concepto` de GastoOperativo). */
+export const CONCEPTOS_GASTO = [
+  { value: "luz", label: "Luz / Electricidad" },
+  { value: "gas", label: "Gas" },
+  { value: "agua", label: "Agua" },
+  { value: "internet", label: "Internet / Servicios" },
+  { value: "alquiler", label: "Alquiler" },
+  { value: "sueldos", label: "Sueldos y Honorarios" },
+  { value: "mantenimiento", label: "Mantenimiento / Reparación" },
+  { value: "impuestos", label: "Impuestos / Tasas" },
+  { value: "otro", label: "Otro gasto operativo" },
+] as const;
+
+export type ConceptoGasto = (typeof CONCEPTOS_GASTO)[number]["value"];
+
 export type GastoOperativo = {
   id: number;
   monto: string;
   fecha: string;
-  categoria: string;
+  concepto: ConceptoGasto;
+  concepto_display: string;
   descripcion: string;
+  sucursal: number | null;
+  sucursal_nombre: string | null;
   registrado_por: number;
   registrado_por_nombre: string;
   creado_en: string;
@@ -34,8 +52,9 @@ export type GastoOperativo = {
 export type GastoOperativoCreateUpdate = {
   monto: string | number;
   fecha: string;
-  categoria?: string;
+  concepto?: ConceptoGasto;
   descripcion?: string;
+  sucursal?: number | null;
 };
 
 export type BalanceData = {
