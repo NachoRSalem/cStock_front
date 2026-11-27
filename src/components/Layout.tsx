@@ -21,7 +21,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { switchAccount } from "../api/auth";
-import { listPedidos } from "../api/orders";
+import { contarPedidosPendientes } from "../api/orders";
 import { tokenStorage } from "../utils/storage";
 import { PageTransition } from "./PageTransition";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
@@ -120,37 +120,36 @@ export function Layout() {
   const session = tokenStorage.getSession();
   const cuentaPareada = tokenStorage.getCuentaPareada();
 
-  // Cargar pedidos pendientes
+  // Cargar la cantidad de pedidos pendientes: el admin ve los enviados a revisión
+  // y la sucursal los aprobados que tiene por recibir (lo decide el servidor).
   useEffect(() => {
-    async function loadPendientes() {
-      try {
-        const pedidos = await listPedidos();
+    let cargando = false;
 
-        if (role === "admin") {
-          // Admin: contar pedidos pendientes (enviados a revisión)
-          const pendientes = pedidos.filter(
-            (p) => p.estado === "pendiente",
-          ).length;
-          setPedidosPendientes(pendientes);
-        } else if (role === "sucursal") {
-          // Sucursal: contar pedidos aprobados destinados a esta sucursal
-          const aprobados = pedidos.filter(
-            (p) => p.estado === "aprobado" && p.destino === session?.sucursal,
-          ).length;
-          setPedidosPendientes(aprobados);
-        }
+    async function loadPendientes() {
+      // Con la pestaña oculta no se consulta; tampoco si la anterior no terminó.
+      if (document.hidden || cargando) return;
+      cargando = true;
+      try {
+        const { cantidad } = await contarPedidosPendientes();
+        setPedidosPendientes(cantidad);
       } catch (err) {
         // Ignorar errores silenciosamente
         console.error("Error loading pedidos:", err);
+      } finally {
+        cargando = false;
       }
     }
 
     loadPendientes();
 
-    // Recargar cada 30 segundos
+    // Recargar cada 30 segundos, y al volver a la pestaña
     const interval = setInterval(loadPendientes, 30000);
+    document.addEventListener("visibilitychange", loadPendientes);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", loadPendientes);
+    };
   }, [role, session?.sucursal]);
 
   const navItems: NavItem[] = useMemo(

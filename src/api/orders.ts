@@ -76,6 +76,11 @@ export function listPedidos() {
   return apiFetch<Pedido[]>("/api/inventory/pedidos/");
 }
 
+/** Cantidad para el aviso del menú, sin descargar todos los pedidos. */
+export function contarPedidosPendientes() {
+  return apiFetch<{ cantidad: number }>("/api/inventory/pedidos/contador/");
+}
+
 export function createPedido(body: PedidoCreateBody) {
   return apiFetch<Pedido>("/api/inventory/pedidos/", { method: "POST", body });
 }
